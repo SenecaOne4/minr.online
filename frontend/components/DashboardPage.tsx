@@ -33,8 +33,10 @@ export default function DashboardPage({ user }: { user: any }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
       // Fetch profile
-      const profileRes = await fetch('/api/profile', {
+      const profileRes = await fetch(`${apiBaseUrl}/api/profile`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -48,7 +50,7 @@ export default function DashboardPage({ user }: { user: any }) {
       }
 
       // Fetch membership
-      const membershipRes = await fetch('/api/membership', {
+      const membershipRes = await fetch(`${apiBaseUrl}/api/membership`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -70,7 +72,9 @@ export default function DashboardPage({ user }: { user: any }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const res = await fetch('/api/profile', {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+      const res = await fetch(`${apiBaseUrl}/api/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
