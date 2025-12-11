@@ -1,0 +1,16 @@
+[Unit]
+Description=Minr.online Backend API
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/minr-backend.env
+WorkingDirectory=/var/www/minr-online/backend
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+

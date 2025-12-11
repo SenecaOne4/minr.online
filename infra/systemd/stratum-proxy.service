@@ -1,0 +1,15 @@
+[Unit]
+Description=Minr.online Go Stratum Proxy
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/minr-online/stratum-proxy
+ExecStart=/var/www/minr-online/stratum-proxy/stratum-proxy
+Restart=always
+RestartSec=5
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+

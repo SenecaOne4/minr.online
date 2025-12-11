@@ -1,0 +1,16 @@
+[Unit]
+Description=Minr.online Frontend
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/minr-frontend.env
+WorkingDirectory=/var/www/minr-online/frontend
+ExecStart=pnpm start
+Restart=always
+RestartSec=5
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+

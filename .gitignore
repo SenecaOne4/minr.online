@@ -1,0 +1,13 @@
+node_modules/
+.env
+dist/
+build/
+pnpm-lock.yaml
+.next/
+out/
+*.log
+.DS_Store
+*.swp
+*.swo
+*~
+
