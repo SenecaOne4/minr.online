@@ -1,12 +1,21 @@
 import WebSocket from 'ws';
 import net from 'net';
 
-const STRATUM_UPSTREAM = process.env.STRATUM_UPSTREAM || 'solo.ckpool.org:3333';
-const BTC_MINING_USERNAME = process.env.BTC_MINING_USERNAME || 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
-const BTC_MINING_PASSWORD = process.env.BTC_MINING_PASSWORD || 'x';
+const STRATUM_UPSTREAM = process.env.STRATUM_UPSTREAM ?? 'solo.ckpool.org:3333';
+const BTC_MINING_USERNAME = process.env.BTC_MINING_USERNAME ?? 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
+const BTC_MINING_PASSWORD = process.env.BTC_MINING_PASSWORD ?? 'x';
+
+interface ConnectionMeta {
+  userId?: string;
+  sessionId?: string;
+}
 
 export function handleStratumConnection(ws: WebSocket): void {
   console.log('[bridge] WebSocket client connected');
+
+  // Connection metadata for future multi-user accounting
+  const meta: ConnectionMeta = {};
+  let metaReceived = false;
 
   // Parse upstream address
   const [host, portStr] = STRATUM_UPSTREAM.split(':');
@@ -49,7 +58,7 @@ export function handleStratumConnection(ws: WebSocket): void {
     }
   });
 
-  // Forward WebSocket → TCP with mining.authorize interception
+  // Forward WebSocket → TCP with mining.authorize interception and meta handling
   ws.on('message', (message: Buffer) => {
     if (!tcpSocket.writable) {
       console.warn('[bridge] TCP socket not writable, dropping message');
@@ -58,16 +67,28 @@ export function handleStratumConnection(ws: WebSocket): void {
 
     const messageStr = message.toString('utf8');
     
-    // Try to parse as JSON to check for mining.subscribe
+    // Try to parse as JSON
     try {
       const parsed = JSON.parse(messageStr);
+      
+      // Handle meta message (only if not already received and this looks like meta)
+      if (!metaReceived && parsed && typeof parsed === 'object' && parsed.type === 'meta') {
+        meta.userId = parsed.userId;
+        meta.sessionId = parsed.sessionId;
+        metaReceived = true;
+        console.log('[bridge] meta from client', meta);
+        // Do NOT forward meta messages to TCP socket
+        return;
+      }
       
       // Check if this is a mining.subscribe message
       if (parsed && typeof parsed === 'object' && parsed.method === 'mining.subscribe') {
         console.log('[bridge] subscribe from client, sending authorize for', BTC_MINING_USERNAME);
         
         // Forward the original subscribe message to TCP
-        tcpSocket.write(messageStr);
+        const outboundStr = messageStr;
+        console.log('[bridge] → upstream', outboundStr.slice(0, 200));
+        tcpSocket.write(outboundStr);
         
         // Immediately send mining.authorize with our credentials
         const authorizeMessage = JSON.stringify({
@@ -83,11 +104,16 @@ export function handleStratumConnection(ws: WebSocket): void {
       }
     } catch (parseError) {
       // Not JSON or parse failed - forward as-is
-      // This handles binary data or malformed JSON gracefully
+      // Log a concise warning without stack spam
+      if (messageStr.length > 0) {
+        console.warn('[bridge] non-JSON message, forwarding as-is');
+      }
     }
     
     // Forward all other messages unchanged
-    tcpSocket.write(messageStr);
+    const outboundStr = messageStr;
+    console.log('[bridge] → upstream', outboundStr.slice(0, 200));
+    tcpSocket.write(outboundStr);
   });
 
   ws.on('close', () => {

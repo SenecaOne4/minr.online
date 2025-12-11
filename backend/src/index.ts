@@ -33,6 +33,7 @@ const wss = new WebSocketServer({
 
 // Handle WebSocket connections
 wss.on('connection', (ws) => {
+  console.log('[bridge] new ws client');
   handleStratumConnection(ws);
 });
 
