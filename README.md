@@ -59,4 +59,3 @@ Deploy the schema from `supabase/schema.sql` via Supabase CLI or dashboard.
 ## Deployment
 
 See deployment instructions in `infra/` directory for production setup.
-
