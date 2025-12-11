@@ -1,14 +1,10 @@
 import express from 'express';
-import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import profileRoutes from './routes/profile';
 import membershipRoutes from './routes/membership';
-import { setupStratumBridge } from './ws/stratumBridge';
+import { handleStratumConnection } from './ws/stratumBridge';
 
 const app = express();
-const server = createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws/stratum-browser' });
-
 const PORT = process.env.PORT || 3000;
 
 // Middleware
@@ -23,12 +19,20 @@ app.get('/health', (req, res) => {
 app.use('/api/profile', profileRoutes);
 app.use('/api/membership', membershipRoutes);
 
-// Setup WebSocket → Stratum bridge
-setupStratumBridge(wss);
-
-// Start server
-server.listen(PORT, () => {
+// Create HTTP server from Express app
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`WebSocket server available at ws://localhost:${PORT}/ws/stratum-browser`);
+});
+
+// Create WebSocket server using the HTTP server
+const wss = new WebSocketServer({
+  server,
+  path: '/ws/stratum-browser',
+});
+
+// Handle WebSocket connections
+wss.on('connection', (ws) => {
+  handleStratumConnection(ws);
 });
 

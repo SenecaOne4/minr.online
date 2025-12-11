@@ -1,57 +1,71 @@
-import { WebSocket } from 'ws';
-import * as net from 'net';
+import WebSocket from 'ws';
+import net from 'net';
 
 const STRATUM_UPSTREAM = process.env.STRATUM_UPSTREAM || 'solo.ckpool.org:3333';
 
-export function setupStratumBridge(wss: any) {
-  wss.on('connection', (ws: WebSocket) => {
-    console.log('WebSocket client connected');
+export function handleStratumConnection(ws: WebSocket): void {
+  console.log('WebSocket client connected');
 
-    // Create TCP connection to Stratum pool
-    const [host, port] = STRATUM_UPSTREAM.split(':');
-    const tcpSocket = net.createConnection(parseInt(port), host);
+  // Parse upstream address
+  const [host, portStr] = STRATUM_UPSTREAM.split(':');
+  const port = parseInt(portStr, 10);
 
-    tcpSocket.on('connect', () => {
-      console.log(`TCP connection established to ${STRATUM_UPSTREAM}`);
-    });
+  if (!host || !port) {
+    console.error(`Invalid STRATUM_UPSTREAM format: ${STRATUM_UPSTREAM}`);
+    ws.close(1008, 'Invalid upstream configuration');
+    return;
+  }
 
-    tcpSocket.on('data', (data: Buffer) => {
-      // Forward TCP → WebSocket
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data.toString());
-      }
-    });
+  // Create TCP connection to Stratum pool
+  const tcpSocket = net.createConnection(port, host);
 
-    tcpSocket.on('error', (error: Error) => {
-      console.error('TCP socket error:', error);
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
-    });
+  tcpSocket.on('connect', () => {
+    console.log(`TCP connection established to ${STRATUM_UPSTREAM}`);
+  });
 
-    tcpSocket.on('close', () => {
-      console.log('TCP connection closed');
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
-    });
+  tcpSocket.on('data', (data: Buffer) => {
+    // Forward TCP → WebSocket (as UTF-8 text)
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(data.toString('utf8'));
+    }
+  });
 
-    // Forward WebSocket → TCP
-    ws.on('message', (message: Buffer) => {
-      if (tcpSocket.writable) {
-        tcpSocket.write(message);
-      }
-    });
+  tcpSocket.on('error', (error: Error) => {
+    console.error(`TCP socket error to ${STRATUM_UPSTREAM}:`, error.message);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close(1011, 'Upstream connection error');
+    }
+  });
 
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
+  tcpSocket.on('close', () => {
+    console.log(`TCP connection to ${STRATUM_UPSTREAM} closed`);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close(1001, 'Upstream connection closed');
+    }
+  });
+
+  // Forward WebSocket → TCP
+  ws.on('message', (message: Buffer) => {
+    if (tcpSocket.writable) {
+      // Send as UTF-8 text to TCP socket
+      tcpSocket.write(message.toString('utf8'));
+    } else {
+      console.warn('TCP socket not writable, dropping message');
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('WebSocket client disconnected');
+    if (!tcpSocket.destroyed) {
       tcpSocket.end();
-    });
+    }
+  });
 
-    ws.on('error', (error: Error) => {
-      console.error('WebSocket error:', error);
+  ws.on('error', (error: Error) => {
+    console.error('WebSocket error:', error.message);
+    if (!tcpSocket.destroyed) {
       tcpSocket.end();
-    });
+    }
   });
 }
 
