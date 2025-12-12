@@ -515,7 +515,7 @@ export default function MinerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -526,7 +526,7 @@ export default function MinerPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Card */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-6 shadow-xl">
+            <div className="backdrop-blur-lg bg-gray-800/60 border border-white/20 rounded-lg p-6 shadow-xl">
               <h2 className="text-2xl font-semibold mb-4">Mining Dashboard</h2>
 
               <div className="space-y-4">
@@ -627,7 +627,7 @@ export default function MinerPage() {
                               addLog('client', `→ Suggest difficulty: ${val}`);
                             }
                           }}
-                          className="w-full px-2 py-1 backdrop-blur-sm bg-white/5 border border-white/10 rounded text-white text-sm"
+                          className="w-full px-2 py-1 backdrop-blur-sm bg-gray-700/50 border border-white/20 rounded text-white text-sm"
                         />
                         <p className="text-xs text-gray-500 mt-1">Default: 16</p>
                       </div>
@@ -653,7 +653,7 @@ export default function MinerPage() {
                               });
                             }
                           }}
-                          className="w-full px-2 py-1 backdrop-blur-sm bg-white/5 border border-white/10 rounded text-white text-sm"
+                          className="w-full px-2 py-1 backdrop-blur-sm bg-gray-700/50 border border-white/20 rounded text-white text-sm"
                         />
                         <p className="text-xs text-gray-500 mt-1">Prevents overlap</p>
                       </div>
@@ -726,7 +726,7 @@ export default function MinerPage() {
 
             {/* ExtraNonce Panel */}
             {extraNonce && (
-              <div className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-6 shadow-xl">
+              <div className="backdrop-blur-lg bg-gray-800/60 border border-white/20 rounded-lg p-6 shadow-xl">
                 <h2 className="text-2xl font-semibold mb-4">ExtraNonce</h2>
                 <div className="space-y-3 font-mono text-sm">
                   <div>
@@ -743,7 +743,7 @@ export default function MinerPage() {
 
             {/* Current Job Panel */}
             {currentJob && (
-              <div className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-6 shadow-xl">
+              <div className="backdrop-blur-lg bg-gray-800/60 border border-white/20 rounded-lg p-6 shadow-xl">
                 <h2 className="text-2xl font-semibold mb-4">Current Job</h2>
                 <div className="space-y-3 font-mono text-sm">
                   <div>
@@ -817,7 +817,7 @@ export default function MinerPage() {
               </div>
               <button
                 onClick={() => setLogs([])}
-                className="mt-4 px-3 py-1 text-sm backdrop-blur-sm bg-white/5 hover:bg-white/10 border border-white/10 rounded"
+                className="mt-4 px-3 py-1 text-sm backdrop-blur-sm bg-gray-700/50 hover:bg-gray-700/70 border border-white/20 rounded"
               >
                 Clear Log
               </button>
