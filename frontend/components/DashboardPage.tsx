@@ -40,7 +40,8 @@ export default function DashboardPage({ user }: { user: any }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      // Use relative URL for API calls (works with NGINX proxy)
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
       // Fetch profile
       const profileRes = await fetch(`${apiBaseUrl}/api/profile`, {
@@ -76,12 +77,24 @@ export default function DashboardPage({ user }: { user: any }) {
 
   const handleSaveProfile = async () => {
     try {
-      if (!supabase) return;
+      if (!supabase) {
+        setSaveMessage('Error: Supabase not configured');
+        setTimeout(() => setSaveMessage(null), 3000);
+        return;
+      }
+      
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        setSaveMessage('Error: Not authenticated. Please log in again.');
+        setTimeout(() => setSaveMessage(null), 3000);
+        return;
+      }
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      // Use relative URL for API calls (works with NGINX proxy)
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
+      setSaveMessage('Saving...');
+      
       const res = await fetch(`${apiBaseUrl}/api/profile`, {
         method: 'POST',
         headers: {
@@ -94,18 +107,23 @@ export default function DashboardPage({ user }: { user: any }) {
         }),
       });
 
+      const responseData = await res.json().catch(() => ({}));
+
       if (res.ok) {
-        const updatedProfile = await res.json();
-        setProfile(updatedProfile);
+        setProfile(responseData);
         setEditing(false);
         setSaveMessage('Profile saved successfully!');
         setTimeout(() => setSaveMessage(null), 3000);
       } else {
-        setSaveMessage('Error saving profile. Please try again.');
-        setTimeout(() => setSaveMessage(null), 3000);
+        const errorMsg = responseData.error || `HTTP ${res.status}: ${res.statusText}`;
+        console.error('Profile save error:', errorMsg, responseData);
+        setSaveMessage(`Error: ${errorMsg}`);
+        setTimeout(() => setSaveMessage(null), 5000);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving profile:', error);
+      setSaveMessage(`Error: ${error?.message || 'Failed to save profile'}`);
+      setTimeout(() => setSaveMessage(null), 5000);
     }
   };
 
