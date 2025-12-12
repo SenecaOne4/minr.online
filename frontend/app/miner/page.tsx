@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from '@/components/Navbar';
 import { supabase } from '@/lib/supabase';
+import MiningMetrics from '@/components/MiningMetrics';
 
 interface CurrentJob {
   jobId: string;
@@ -33,13 +34,14 @@ interface LogEntry {
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 type WorkerState = 'starting' | 'running' | 'stopped' | 'error';
 
-const PAYOUT_ADDRESS = 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
-const BTC_MINING_USERNAME = 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://ws.minr.online/ws/stratum-browser';
 
 export default function MinerPage() {
   const [user, setUser] = useState<any>(null);
+  const isAdmin = user?.email === 'senecaone4@gmail.com';
   const [loading, setLoading] = useState(true);
+  const [hasPaidEntryFee, setHasPaidEntryFee] = useState(false);
+  const [adminWallet, setAdminWallet] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [isMining, setIsMining] = useState(false);
   const [desiredDifficulty, setDesiredDifficulty] = useState(16);
@@ -234,11 +236,13 @@ export default function MinerPage() {
               addLog('info', `ExtraNonce: ${extranonce1}, size: ${extranonce2Size}`);
               
               // Send mining.authorize after subscribe response
+              // Use admin wallet from settings, fallback to default
+              const walletAddress = adminWallet || 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
               const authorizeMsg = {
                 id: 2,
                 method: 'mining.authorize',
                 params: [
-                  process.env.NEXT_PUBLIC_BTC_MINING_USERNAME || BTC_MINING_USERNAME,
+                  walletAddress,
                   process.env.NEXT_PUBLIC_BTC_MINING_PASSWORD || 'x',
                 ],
               };
@@ -518,12 +522,35 @@ export default function MinerPage() {
     }
   };
 
-  // Check authentication
+  // Check authentication and payment status
   useEffect(() => {
     if (supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (session?.user) {
           setUser(session.user);
+          
+          // Check payment status and load admin wallet
+          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+          
+          // Check profile for payment status
+          const profileRes = await fetch(`${apiBaseUrl}/api/profile`, {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+          
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            setHasPaidEntryFee(profileData.has_paid_entry_fee || false);
+          }
+          
+          // Load admin wallet from settings (public endpoint)
+          const settingsRes = await fetch(`${apiBaseUrl}/api/admin/settings`);
+          if (settingsRes.ok) {
+            const settingsData = await settingsRes.json();
+            setAdminWallet(settingsData.admin_btc_wallet || '');
+          }
+          
           setLoading(false);
         } else {
           setLoading(false);
@@ -563,6 +590,28 @@ export default function MinerPage() {
     );
   }
 
+  if (!hasPaidEntryFee) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <Navbar userEmail={user?.email} isAdmin={isAdmin} />
+        <div className="flex items-center justify-center min-h-[80vh]">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-8 shadow-2xl max-w-md text-center">
+            <h2 className="text-2xl font-bold text-white mb-4">Payment Required</h2>
+            <p className="text-gray-300 mb-6">
+              You must pay the $1 USD entry fee to start mining. Join the lottery pool and start earning!
+            </p>
+            <a
+              href="/payment"
+              className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+            >
+              Pay Entry Fee →
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
       <Navbar userEmail={user?.email} />
@@ -570,7 +619,18 @@ export default function MinerPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2 text-white">Minr.online</h1>
-          <p className="text-gray-300 text-lg">Bitcoin Mining Platform</p>
+          <p className="text-gray-300 text-lg">Bitcoin Lottery Pool Mining Platform</p>
+          <p className="text-gray-400 text-sm mt-2">Like a lottery - if someone solves a block, we split the BTC payout</p>
+        </div>
+
+        {/* Mining Metrics */}
+        <div className="mb-6">
+          <MiningMetrics
+            currentHashrate={hashesPerSecond}
+            sharesAccepted={realShares}
+            sharesRejected={0}
+            connectionStatus={connectionStatus}
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -581,8 +641,8 @@ export default function MinerPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm text-gray-400">Payout Address</label>
-                  <p className="font-mono text-sm break-all">{PAYOUT_ADDRESS}</p>
+                  <label className="text-sm text-gray-400">Lottery Pool Payout Address</label>
+                  <p className="font-mono text-sm break-all">{adminWallet || 'Loading...'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

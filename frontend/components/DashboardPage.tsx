@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import Navbar from './Navbar';
+import PaymentGate from './PaymentGate';
+import AnalyticsDashboard from './AnalyticsDashboard';
 
 interface Profile {
   id: string;
@@ -25,6 +27,10 @@ export default function DashboardPage({ user }: { user: any }) {
   const [username, setUsername] = useState('');
   const [btcAddress, setBtcAddress] = useState('');
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [hasPaidEntryFee, setHasPaidEntryFee] = useState(false);
+  
+  // Check if user is admin (compare email to admin email)
+  const isAdmin = user?.email === 'senecaone4@gmail.com';
 
   useEffect(() => {
     loadData();
@@ -55,6 +61,7 @@ export default function DashboardPage({ user }: { user: any }) {
         setProfile(profileData);
         setUsername(profileData.username || '');
         setBtcAddress(profileData.btc_payout_address || '');
+        setHasPaidEntryFee(profileData.has_paid_entry_fee || false);
       }
 
       // Fetch membership
@@ -139,13 +146,20 @@ export default function DashboardPage({ user }: { user: any }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <Navbar userEmail={user.email} />
+      <Navbar userEmail={user.email} isAdmin={isAdmin} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Dashboard</h1>
-          <p className="text-gray-400">Manage your profile and start mining</p>
+          <p className="text-gray-400">Join the Minr.online Lottery Pool • Manage your profile and start mining</p>
         </div>
+
+        {/* Payment Gate */}
+        {!hasPaidEntryFee && (
+          <div className="mb-6">
+            <PaymentGate />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Profile Card */}
@@ -257,20 +271,52 @@ export default function DashboardPage({ user }: { user: any }) {
           </div>
         </div>
 
+        {/* Analytics Section */}
+        {hasPaidEntryFee && (
+          <div className="mb-6">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
+              <h2 className="text-2xl font-bold mb-4 text-white">Mining Analytics</h2>
+              <AnalyticsDashboard />
+            </div>
+          </div>
+        )}
+
         {/* Mining Section */}
-        <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl p-6 shadow-xl">
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
           <h2 className="text-2xl font-bold mb-4 text-white">Start Mining</h2>
           <p className="text-gray-300 mb-6">
-            Use our browser-based miner to start mining Bitcoin. Connect to a Stratum pool and start hashing!
+            Join the lottery pool! If someone solves a block, we split the BTC payout. Use our browser-based miner or download the desktop miner.
           </p>
-          <Link
-            href="/miner"
-            className="inline-block bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
-          >
-            Launch Miner →
-          </Link>
+          <div className="flex flex-wrap gap-4">
+            {hasPaidEntryFee ? (
+              <>
+                <Link
+                  href="/miner"
+                  className="inline-block bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+                >
+                  Launch Browser Miner →
+                </Link>
+                <a
+                  href="/api/miner-download"
+                  download
+                  className="inline-block bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+                >
+                  Download Desktop Miner →
+                </a>
+              </>
+            ) : (
+              <Link
+                href="/payment"
+                className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+              >
+                Pay Entry Fee to Start Mining →
+              </Link>
+            )}
+          </div>
           <p className="text-sm text-gray-400 mt-4">
-            Make sure your profile is complete with a BTC payout address before mining.
+            {hasPaidEntryFee
+              ? 'Make sure your profile is complete with a BTC payout address before mining.'
+              : 'Pay $1 USD entry fee to unlock mining features.'}
           </p>
         </div>
       </main>
