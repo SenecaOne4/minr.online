@@ -53,8 +53,6 @@ export default function Home() {
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
-        } else if (event === 'TOKEN_REFRESHED') {
-          setUser(session?.user ?? null);
         } else {
           setUser(session?.user ?? null);
         }
