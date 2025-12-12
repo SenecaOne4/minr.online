@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import Navbar from './Navbar';
-import PaymentGate from './PaymentGate';
-import AnalyticsDashboard from './AnalyticsDashboard';
+import Navbar from '@/components/Navbar';
+import PaymentGate from '@/components/PaymentGate';
+import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 
 interface Profile {
   id: string;
