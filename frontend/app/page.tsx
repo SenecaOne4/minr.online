@@ -12,16 +12,27 @@ export default function Home() {
   useEffect(() => {
     // Check for existing session (only if Supabase is configured)
     if (supabase) {
+      // Handle auth callback from email link (processes hash fragments)
       supabase.auth.getSession().then(({ data: { session } }) => {
         setUser(session?.user ?? null);
         setLoading(false);
       });
 
-      // Listen for auth changes
+      // Listen for auth changes (including email link callbacks)
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
+      } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setUser(session?.user ?? null);
+          // Clear hash fragment after processing
+          if (window.location.hash) {
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        } else {
+          setUser(session?.user ?? null);
+        }
       });
 
       return () => subscription.unsubscribe();
