@@ -33,9 +33,8 @@ export default function MinerPlayground() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const miningLoopRef = useRef<number | null>(null);
-  const hashCountRef = useRef(0);
-  const lastHashTimeRef = useRef(Date.now());
+  const workerRef = useRef<Worker | null>(null);
+  const [workerRunning, setWorkerRunning] = useState(false);
   const logIdRef = useRef(0);
 
   // Helper to add log entries
@@ -49,18 +48,60 @@ export default function MinerPlayground() {
     setLogs((prev) => [...prev, entry]);
   };
 
-  // WebSocket connection management
+  // Initialize Web Worker
   useEffect(() => {
+    // Create worker
+    const worker = new Worker('/miner.worker.js');
+    workerRef.current = worker;
+
+    // Handle worker messages
+    worker.onmessage = (e) => {
+      const { type, hashesCompleted, hashesPerSecond, fakeShareCount } = e.data;
+
+      if (type === 'progress') {
+        setHashesPerSecond(hashesPerSecond);
+        setTotalHashes((prev) => prev + hashesCompleted);
+        setFakeShares((prev) => {
+          if (fakeShareCount > prev) {
+            addLog('demo', `🎉 Fake share found! (toy target) - Total: ${fakeShareCount}`);
+            return fakeShareCount;
+          }
+          return prev;
+        });
+      } else if (type === 'stopped') {
+        setWorkerRunning(false);
+        setTotalHashes((prev) => prev + hashesCompleted);
+        setFakeShares(fakeShareCount);
+      }
+    };
+
+    worker.onerror = (error) => {
+      console.error('Worker error:', error);
+      addLog('error', 'Worker error occurred');
+      setWorkerRunning(false);
+    };
+
+    // Cleanup on unmount
     return () => {
-      // Cleanup on unmount
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
       if (wsRef.current) {
         wsRef.current.close();
       }
-      if (miningLoopRef.current !== null) {
-        cancelAnimationFrame(miningLoopRef.current);
-      }
     };
   }, []);
+
+  // Update worker when job changes
+  useEffect(() => {
+    if (workerRef.current && currentJob) {
+      workerRef.current.postMessage({
+        type: 'job',
+        data: currentJob,
+      });
+    }
+  }, [currentJob]);
 
   const connectWebSocket = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -160,99 +201,32 @@ export default function MinerPlayground() {
     addLog('info', 'Disconnected from pool');
   };
 
-  // Double SHA-256 hash function
-  const doubleSha256 = async (input: string): Promise<string> => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(input);
-
-    // First SHA-256
-    const hash1 = await crypto.subtle.digest('SHA-256', data);
-    // Second SHA-256
-    const hash2 = await crypto.subtle.digest('SHA-256', hash1);
-
-    // Convert to hex string
-    const hashArray = Array.from(new Uint8Array(hash2));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  };
-
-  // Demo mining loop
-  useEffect(() => {
-    if (!isMining) {
-      if (miningLoopRef.current !== null) {
-        cancelAnimationFrame(miningLoopRef.current);
-        miningLoopRef.current = null;
-      }
-      return;
-    }
-
-    let nonce = 0;
-    const startTime = Date.now();
-
-    const mine = async () => {
-      // Build job string from current job or use default
-      let jobString: string;
+  const startMining = () => {
+    if (workerRef.current && !workerRunning) {
+      setIsMining(true);
+      setWorkerRunning(true);
+      setTotalHashes(0);
+      setFakeShares(0);
+      
+      // Send current job if available
       if (currentJob) {
-        jobString = `${currentJob.jobId}|${currentJob.prevhash}|${currentJob.nTime}|${currentJob.nBits}|${nonce}`;
-      } else {
-        // Fallback to default string
-        jobString = `GarciaFamilyBlock|${Date.now()}|${nonce}`;
-      }
-
-      try {
-        const hash = await doubleSha256(jobString);
-        hashCountRef.current++;
-
-        // Update hash rate every second
-        const now = Date.now();
-        const elapsed = (now - lastHashTimeRef.current) / 1000;
-        if (elapsed >= 1) {
-          const hps = hashCountRef.current / elapsed;
-          setHashesPerSecond(Math.round(hps));
-          setTotalHashes(hashCountRef.current);
-          hashCountRef.current = 0;
-          lastHashTimeRef.current = now;
-        }
-
-        // Toy difficulty check: look for hash starting with "0000" (very easy)
-        if (hash.startsWith('0000')) {
-          setFakeShares((prev) => prev + 1);
-          addLog('demo', `🎉 Fake share found! Hash: ${hash.substring(0, 16)}... (toy target)`);
-        }
-
-        nonce++;
-      } catch (error) {
-        console.error('Mining error:', error);
-      }
-
-      // Continue mining loop
-      if (isMining) {
-        miningLoopRef.current = requestAnimationFrame(() => {
-          mine();
+        workerRef.current.postMessage({
+          type: 'job',
+          data: currentJob,
         });
       }
-    };
-
-    // Start mining
-    miningLoopRef.current = requestAnimationFrame(() => {
-      mine();
-    });
-
-    return () => {
-      if (miningLoopRef.current !== null) {
-        cancelAnimationFrame(miningLoopRef.current);
-        miningLoopRef.current = null;
-      }
-    };
-  }, [isMining, currentJob]);
-
-  const startMining = () => {
-    setIsMining(true);
-    addLog('demo', 'Demo mining started');
+      
+      workerRef.current.postMessage({ type: 'start' });
+      addLog('demo', 'Demo mining started (Web Worker)');
+    }
   };
 
   const stopMining = () => {
-    setIsMining(false);
-    addLog('demo', 'Demo mining stopped');
+    if (workerRef.current && workerRunning) {
+      setIsMining(false);
+      workerRef.current.postMessage({ type: 'stop' });
+      addLog('demo', 'Demo mining stopped');
+    }
   };
 
   // Helper function for future real share submission (TODO)
@@ -331,6 +305,13 @@ export default function MinerPlayground() {
                     <label className="text-sm text-gray-400">Total Hashes</label>
                     <p className="text-2xl font-bold">{totalHashes.toLocaleString()}</p>
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400">Worker Running</label>
+                  <p className={`font-semibold ${workerRunning ? 'text-green-600' : 'text-gray-600'}`}>
+                    {workerRunning ? 'Yes' : 'No'}
+                  </p>
                 </div>
 
                 {fakeShares > 0 && (
