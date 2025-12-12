@@ -585,14 +585,14 @@ export default function MinerPage() {
   // Prevent hydration mismatch - don't render until mounted
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-4 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-900 text-white p-4 flex items-center justify-center" style={{ backgroundColor: '#111827' }}>
         <div className="text-xl">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4">
+    <div className="min-h-screen bg-gray-900 text-white p-4" style={{ backgroundColor: '#111827', minHeight: '100vh' }}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
