@@ -243,6 +243,16 @@ export default function MinerPage() {
             }
           }
 
+          // Handle mining.authorize response
+          if (parsed.id === 2) {
+            if (parsed.result === true) {
+              addLog('info', `✅ Authorization successful`);
+            } else {
+              const errorMsg = parsed.error || 'Unknown error';
+              addLog('error', `❌ Authorization failed: ${errorMsg}`);
+            }
+          }
+
           // Handle mining.suggest_difficulty response
           if (parsed.id === 100) {
             if (parsed.result === true) {
@@ -333,9 +343,14 @@ export default function MinerPage() {
         console.error('WebSocket error:', error);
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         setConnectionStatus('disconnected');
-        addLog('info', 'WebSocket disconnected');
+        const reason = event.reason || 'No reason provided';
+        const code = event.code;
+        addLog('info', `WebSocket disconnected (code: ${code}, reason: ${reason || 'none'})`);
+        if (code !== 1000 && code !== 1001) {
+          addLog('error', `Unexpected disconnect - code ${code} usually indicates an error`);
+        }
         wsRef.current = null;
       };
     } catch (error) {
