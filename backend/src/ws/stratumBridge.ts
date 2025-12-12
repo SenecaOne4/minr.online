@@ -39,7 +39,7 @@ export function handleStratumConnection(ws: WebSocket): void {
     const chunk = data.toString('utf8');
     console.log('[bridge] ← upstream', chunk.slice(0, 200));
     
-    // Check for mining.submit response
+    // Parse and log all responses
     try {
       // Handle multiple JSON messages in one chunk (Stratum can send multiple lines)
       const lines = chunk.trim().split('\n');
@@ -47,6 +47,17 @@ export function handleStratumConnection(ws: WebSocket): void {
         if (!line.trim()) continue;
         try {
           const parsed = JSON.parse(line);
+          
+          // Log authorization response
+          if (parsed.id === 2) {
+            if (parsed.result === true) {
+              console.log('[bridge] ✅ Authorization SUCCESS (ID: 2)');
+            } else {
+              console.log('[bridge] ❌ Authorization FAILED (ID: 2):', parsed.error || 'Unknown error');
+            }
+          }
+          
+          // Log submit responses
           if (parsed.id && parsed.id >= 3 && parsed.id < 100) {
             if (parsed.result === true) {
               console.log('[bridge] ✅ Submit SUCCESS (ID:', parsed.id, ')');
@@ -64,20 +75,23 @@ export function handleStratumConnection(ws: WebSocket): void {
     
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(chunk);
+    } else {
+      console.warn('[bridge] WebSocket not open, dropping upstream data');
     }
   });
 
   tcpSocket.on('error', (error: Error) => {
     console.error(`[bridge] TCP socket error to ${STRATUM_UPSTREAM}:`, error.message);
+    console.error(`[bridge] TCP error code:`, (error as any).code);
     if (ws.readyState === WebSocket.OPEN) {
-      ws.close(1011, 'Upstream connection error');
+      ws.close(1011, `Upstream connection error: ${error.message}`);
     }
   });
 
-  tcpSocket.on('close', () => {
-    console.log(`[bridge] TCP connection to ${STRATUM_UPSTREAM} closed`);
+  tcpSocket.on('close', (hadError: boolean) => {
+    console.log(`[bridge] TCP connection to ${STRATUM_UPSTREAM} closed (hadError: ${hadError})`);
     if (ws.readyState === WebSocket.OPEN) {
-      ws.close(1001, 'Upstream connection closed');
+      ws.close(1001, hadError ? 'Upstream connection error' : 'Upstream connection closed');
     }
   });
 
@@ -106,23 +120,25 @@ export function handleStratumConnection(ws: WebSocket): void {
       
       // Check if this is a mining.subscribe message
       if (parsed && typeof parsed === 'object' && parsed.method === 'mining.subscribe') {
-        console.log('[bridge] subscribe from client, sending authorize for', BTC_MINING_USERNAME);
+        console.log('[bridge] subscribe from client, forwarding to upstream');
         
         // Forward the original subscribe message to TCP
         const outboundStr = messageStr;
         console.log('[bridge] → upstream', outboundStr.slice(0, 200));
         tcpSocket.write(outboundStr);
         
-        // Immediately send mining.authorize with our credentials
-        const authorizeMessage = JSON.stringify({
-          id: 2,
-          method: 'mining.authorize',
-          params: [BTC_MINING_USERNAME, BTC_MINING_PASSWORD],
-        });
+        // NOTE: Frontend will send authorize after receiving subscribe response
+        // We don't send authorize here to avoid duplicate authorize messages
+        // The bridge used to auto-authorize, but now frontend handles it
         
-        console.log('[bridge] → upstream authorize:', authorizeMessage);
-        tcpSocket.write(authorizeMessage + '\n');
-        
+        return;
+      }
+      
+      // Check if this is a mining.authorize message from frontend
+      if (parsed && typeof parsed === 'object' && parsed.method === 'mining.authorize') {
+        console.log('[bridge] authorize from client, forwarding to upstream');
+        // Forward as-is - frontend handles the credentials
+        tcpSocket.write(messageStr);
         return;
       }
 
