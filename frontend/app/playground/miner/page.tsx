@@ -5,9 +5,20 @@ import { useState, useEffect, useRef } from 'react';
 interface CurrentJob {
   jobId: string;
   prevhash: string;
-  nTime: string;
+  coinb1: string;
+  coinb2: string;
+  merkleBranches: string[];
+  version: string;
   nBits: string;
+  nTime: string;
+  cleanJobs: boolean;
   difficulty?: number;
+  target?: string; // Computed target for share validation
+}
+
+interface ExtraNonce {
+  extranonce1: string;
+  extranonce2Size: number;
 }
 
 interface LogEntry {
@@ -20,17 +31,22 @@ interface LogEntry {
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 const PAYOUT_ADDRESS = 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
+const BTC_MINING_USERNAME = 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://ws.minr.online/ws/stratum-browser';
 
 export default function MinerPlayground() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [isMining, setIsMining] = useState(false);
+  const [realShareMode, setRealShareMode] = useState(false);
   const [hashesPerSecond, setHashesPerSecond] = useState(0);
   const [totalHashes, setTotalHashes] = useState(0);
   const [fakeShares, setFakeShares] = useState(0);
+  const [realShares, setRealShares] = useState(0);
   const [currentJob, setCurrentJob] = useState<CurrentJob | null>(null);
   const [difficulty, setDifficulty] = useState<number | null>(null);
+  const [extraNonce, setExtraNonce] = useState<ExtraNonce | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const submitIdRef = useRef(3);
 
   const wsRef = useRef<WebSocket | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -56,7 +72,7 @@ export default function MinerPlayground() {
 
     // Handle worker messages
     worker.onmessage = (e) => {
-      const { type, hashesCompleted, hashesPerSecond, fakeShareCount } = e.data;
+      const { type, hashesCompleted, hashesPerSecond, fakeShareCount, share } = e.data;
 
       if (type === 'progress') {
         setHashesPerSecond(hashesPerSecond);
@@ -68,6 +84,11 @@ export default function MinerPlayground() {
           }
           return prev;
         });
+      } else if (type === 'share') {
+        // Real share found - submit to pool
+        if (share && wsRef.current?.readyState === WebSocket.OPEN) {
+          submitRealShare(share);
+        }
       } else if (type === 'stopped') {
         setWorkerRunning(false);
         setTotalHashes((prev) => prev + hashesCompleted);
@@ -93,15 +114,19 @@ export default function MinerPlayground() {
     };
   }, []);
 
-  // Update worker when job changes
+  // Update worker when job changes or real share mode changes
   useEffect(() => {
     if (workerRef.current && currentJob) {
       workerRef.current.postMessage({
         type: 'job',
-        data: currentJob,
+        data: {
+          ...currentJob,
+          realShareMode,
+          extraNonce,
+        },
       });
     }
-  }, [currentJob]);
+  }, [currentJob, realShareMode, extraNonce]);
 
   const connectWebSocket = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -138,19 +163,39 @@ export default function MinerPlayground() {
         try {
           const parsed = JSON.parse(data);
 
-          // Handle mining.notify
+          // Handle mining.subscribe response
+          if (parsed.id === 1 && parsed.result) {
+            const result = parsed.result;
+            if (Array.isArray(result) && result.length >= 2) {
+              const extranonce1 = result[1] || '';
+              const extranonce2Size = result[2] || 4;
+              setExtraNonce({ extranonce1, extranonce2Size });
+              addLog('info', `ExtraNonce: ${extranonce1}, size: ${extranonce2Size}`);
+            }
+          }
+
+          // Handle mining.notify (full params)
           if (parsed.method === 'mining.notify') {
             const params = parsed.params || [];
-            if (params.length >= 5) {
+            if (params.length >= 9) {
               const job: CurrentJob = {
                 jobId: params[0] || '',
                 prevhash: params[1] || '',
-                nTime: params[2] || '',
-                nBits: params[3] || '',
+                coinb1: params[2] || '',
+                coinb2: params[3] || '',
+                merkleBranches: Array.isArray(params[4]) ? params[4] : [],
+                version: params[5] || '',
+                nBits: params[6] || '',
+                nTime: params[7] || '',
+                cleanJobs: params[8] === true,
                 difficulty: difficulty || undefined,
+                target: difficulty ? computeTarget(difficulty) : undefined,
               };
               setCurrentJob(job);
               addLog('info', `New job received: ${job.jobId}`);
+              if (job.cleanJobs) {
+                addLog('info', 'Clean jobs flag set - reset worker');
+              }
             }
           }
 
@@ -159,15 +204,31 @@ export default function MinerPlayground() {
             const newDifficulty = parsed.params?.[0];
             if (typeof newDifficulty === 'number') {
               setDifficulty(newDifficulty);
+              const target = computeTarget(newDifficulty);
               setCurrentJob((prev) =>
-                prev ? { ...prev, difficulty: newDifficulty } : null
+                prev
+                  ? { ...prev, difficulty: newDifficulty, target }
+                  : null
               );
               addLog('info', `Difficulty set to: ${newDifficulty}`);
+              if (realShareMode && newDifficulty >= 10000) {
+                addLog('error', `⚠️ High difficulty (${newDifficulty}) - browsers may not find shares`);
+              }
+            }
+          }
+
+          // Handle mining.submit response
+          if (parsed.id && parsed.id >= 3 && parsed.id < 100) {
+            if (parsed.result === true) {
+              addLog('pool', `✅ Share accepted! (ID: ${parsed.id})`);
+              setRealShares((prev) => prev + 1);
+            } else {
+              addLog('error', `❌ Share rejected: ${parsed.error || 'Unknown error'} (ID: ${parsed.id})`);
             }
           }
 
           // Handle other responses
-          if (parsed.result || parsed.error) {
+          if ((parsed.result || parsed.error) && !parsed.id) {
             addLog('pool', `Response: ${JSON.stringify(parsed)}`);
           }
         } catch (parseError) {
@@ -201,23 +262,42 @@ export default function MinerPlayground() {
     addLog('info', 'Disconnected from pool');
   };
 
+  // Compute target from difficulty
+  const computeTarget = (diff: number): string => {
+    // Target = (2^256) / (difficulty * 2^32)
+    // For share validation, we compare header hash to target
+    // Simplified: target is difficulty threshold
+    const maxTarget = BigInt('0x00000000ffff0000000000000000000000000000000000000000000000000000');
+    const target = maxTarget / BigInt(Math.floor(diff));
+    return target.toString(16).padStart(64, '0');
+  };
+
   const startMining = () => {
     if (workerRef.current && !workerRunning) {
       setIsMining(true);
       setWorkerRunning(true);
       setTotalHashes(0);
       setFakeShares(0);
+      setRealShares(0);
       
-      // Send current job if available
-      if (currentJob) {
+      // Send current job and config if available
+      if (currentJob && extraNonce) {
         workerRef.current.postMessage({
           type: 'job',
-          data: currentJob,
+          data: {
+            ...currentJob,
+            realShareMode,
+            extraNonce,
+          },
         });
       }
       
-      workerRef.current.postMessage({ type: 'start' });
-      addLog('demo', 'Demo mining started (Web Worker)');
+      workerRef.current.postMessage({ type: 'start', realShareMode });
+      addLog(realShareMode ? 'info' : 'demo', 
+        realShareMode 
+          ? `Real share mining started (difficulty: ${difficulty || 'unknown'})`
+          : 'Demo mining started (Web Worker)'
+      );
     }
   };
 
@@ -229,22 +309,38 @@ export default function MinerPlayground() {
     }
   };
 
-  // Helper function for future real share submission (TODO)
-  function submitShare(nonce: string) {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    // TODO: Wire with real job data and user identity
+  // Submit real share to pool
+  function submitRealShare(share: {
+    jobId: string;
+    extranonce2: string;
+    ntime: string;
+    nonce: string;
+  }) {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      addLog('error', 'Cannot submit share - not connected to pool');
+      return;
+    }
+
+    if (!extraNonce) {
+      addLog('error', 'Cannot submit share - extranonce not set');
+      return;
+    }
+
+    const submitId = submitIdRef.current++;
     const msg = {
-      id: 3,
+      id: submitId,
       method: 'mining.submit',
       params: [
-        'worker-id-here', // to be wired with real identity later
-        currentJob?.jobId || 'jobId',
-        'extraNonce2',
-        currentJob?.nTime || 'ntime',
-        nonce,
+        BTC_MINING_USERNAME, // worker name (using BTC address)
+        share.jobId,
+        share.extranonce2,
+        share.ntime,
+        share.nonce,
       ],
     };
+
     wsRef.current.send(JSON.stringify(msg));
+    addLog('client', `→ Submit share: job=${share.jobId}, nonce=${share.nonce}`);
   }
 
   const getStatusColor = (status: ConnectionStatus) => {
@@ -314,7 +410,18 @@ export default function MinerPlayground() {
                   </p>
                 </div>
 
-                {fakeShares > 0 && (
+                {realShareMode && difficulty && difficulty >= 10000 && (
+                  <div className="bg-red-900/30 border border-red-600 rounded p-3">
+                    <p className="text-red-400 font-semibold">
+                      ⚠️ Real Share Mode Active
+                    </p>
+                    <p className="text-xs text-red-300 mt-1">
+                      At difficulty {difficulty}, browsers may not find shares. This is real mode.
+                    </p>
+                  </div>
+                )}
+
+                {fakeShares > 0 && !realShareMode && (
                   <div className="bg-yellow-900/30 border border-yellow-600 rounded p-3">
                     <p className="text-yellow-400">
                       🎉 Fake Shares Found: <span className="font-bold">{fakeShares}</span>
@@ -324,6 +431,31 @@ export default function MinerPlayground() {
                     </p>
                   </div>
                 )}
+
+                {realShares > 0 && (
+                  <div className="bg-green-900/30 border border-green-600 rounded p-3">
+                    <p className="text-green-400">
+                      ✅ Real Shares Submitted: <span className="font-bold">{realShares}</span>
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={realShareMode}
+                      onChange={(e) => {
+                        setRealShareMode(e.target.checked);
+                        if (e.target.checked && difficulty && difficulty >= 10000) {
+                          addLog('error', `⚠️ Real Share Mode enabled at difficulty ${difficulty}`);
+                        }
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Real Share Mode</span>
+                  </label>
+                </div>
 
                 <div className="flex flex-wrap gap-3">
                   <button

@@ -115,9 +115,70 @@ function doubleSha256(input) {
     .join('');
 }
 
+// Helper: Reverse byte order (little-endian to big-endian for hex strings)
+function reverseHex(hex) {
+  let result = '';
+  for (let i = hex.length - 2; i >= 0; i -= 2) {
+    result += hex.substr(i, 2);
+  }
+  return result;
+}
+
+// Helper: Build merkle root from coinbase hash and merkle branches
+function buildMerkleRoot(coinbaseHash, merkleBranches) {
+  // Reverse coinbase hash to little-endian for merkle calculation
+  let merkleRoot = reverseHex(coinbaseHash);
+  for (let i = 0; i < merkleBranches.length; i++) {
+    const branch = merkleBranches[i];
+    // Concatenate (little-endian) and double SHA256
+    const combined = merkleRoot + branch;
+    const hashBytes = sha256(sha256(hexToBytes(combined)));
+    merkleRoot = bytesToHex(hashBytes);
+  }
+  return reverseHex(merkleRoot); // Convert back to big-endian for block header
+}
+
+// Helper: Convert hex string to bytes
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes;
+}
+
+// Helper: Convert bytes to hex string
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Helper: Assemble block header
+function assembleBlockHeader(version, prevhash, merkleRoot, ntime, nbits, nonce) {
+  // Block header: version (4) + prevhash (32) + merkle_root (32) + ntime (4) + nbits (4) + nonce (4) = 80 bytes
+  const versionHex = reverseHex(version.padStart(8, '0'));
+  const prevhashHex = reverseHex(prevhash);
+  const merkleRootHex = reverseHex(merkleRoot);
+  const ntimeHex = reverseHex(ntime.padStart(8, '0'));
+  const nbitsHex = reverseHex(nbits.padStart(8, '0'));
+  const nonceHex = reverseHex(nonce.toString(16).padStart(8, '0'));
+  
+  return versionHex + prevhashHex + merkleRootHex + ntimeHex + nbitsHex + nonceHex;
+}
+
+// Helper: Compare hash to target (both as hex strings)
+function hashMeetsTarget(hashHex, targetHex) {
+  // Compare as big integers (little-endian)
+  const hashRev = reverseHex(hashHex);
+  const targetRev = reverseHex(targetHex);
+  return BigInt('0x' + hashRev) <= BigInt('0x' + targetRev);
+}
+
 // Worker state
 let isRunning = false;
 let currentJob = null;
+let realShareMode = false;
+let extraNonce = null;
+let extranonce2Counter = 0;
 let startNonce = 0;
 let nonceCounter = 0;
 let hashesCompleted = 0;
@@ -135,21 +196,81 @@ function mineBatch() {
   
   for (let i = 0; i < batchSize; i++) {
     const nonce = startNonce + nonceCounter++;
-    let jobString;
     
-    if (currentJob) {
-      jobString = `${currentJob.jobId}|${currentJob.prevhash}|${currentJob.nTime}|${currentJob.nBits}|${nonce}`;
+    if (realShareMode && currentJob.coinb1 && currentJob.coinb2 && extraNonce) {
+      // Real share mode: assemble proper block header
+      try {
+        // Generate extranonce2 (incrementing counter)
+        const extranonce2Hex = extranonce2Counter.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
+        
+        // Assemble coinbase: coinb1 + extranonce1 + extranonce2 + coinb2
+        const coinbaseHex = currentJob.coinb1 + extraNonce.extranonce1 + extranonce2Hex + currentJob.coinb2;
+        const coinbaseBytes = hexToBytes(coinbaseHex);
+        const coinbaseHashBytes = sha256(sha256(coinbaseBytes));
+        const coinbaseHash = bytesToHex(coinbaseHashBytes);
+        
+        // Build merkle root
+        const merkleRoot = buildMerkleRoot(coinbaseHash, currentJob.merkleBranches || []);
+        
+        // Assemble block header
+        const blockHeaderHex = assembleBlockHeader(
+          currentJob.version || '20000000',
+          currentJob.prevhash,
+          merkleRoot,
+          currentJob.nTime,
+          currentJob.nBits,
+          nonce
+        );
+        
+        // Hash block header (double SHA256)
+        const blockHeaderBytes = hexToBytes(blockHeaderHex);
+        const headerHashBytes = sha256(sha256(blockHeaderBytes));
+        const headerHash = bytesToHex(headerHashBytes);
+        hashesCompleted++;
+        
+        // Check against target
+        if (currentJob.target && hashMeetsTarget(headerHash, currentJob.target)) {
+          // Share found!
+          self.postMessage({
+            type: 'share',
+            share: {
+              jobId: currentJob.jobId,
+              extranonce2: extranonce2Hex,
+              ntime: currentJob.nTime,
+              nonce: nonce.toString(16).padStart(8, '0'),
+              headerHash: headerHash,
+            },
+          });
+        }
+        
+        // Increment extranonce2 every 1000 nonces (or reset nonce range)
+        if (nonceCounter % 1000 === 0) {
+          extranonce2Counter++;
+        }
+      } catch (error) {
+        // Fallback to simple mode on error
+        const hash = doubleSha256(`${currentJob.jobId}|${currentJob.prevhash}|${currentJob.nTime}|${currentJob.nBits}|${nonce}`);
+        hashesCompleted++;
+        if (hash.startsWith('0000')) {
+          fakeShareCount++;
+        }
+      }
     } else {
-      jobString = `GarciaFamilyBlock|${Date.now()}|${nonce}`;
-    }
-    
-    const hash = doubleSha256(jobString);
-    batchHashes++;
-    hashesCompleted++;
-    
-    // Toy difficulty check: hash starting with "0000"
-    if (hash.startsWith('0000')) {
-      fakeShareCount++;
+      // Demo mode: simple hashing
+      let jobString;
+      if (currentJob) {
+        jobString = `${currentJob.jobId}|${currentJob.prevhash}|${currentJob.nTime}|${currentJob.nBits}|${nonce}`;
+      } else {
+        jobString = `GarciaFamilyBlock|${Date.now()}|${nonce}`;
+      }
+      
+      const hash = doubleSha256(jobString);
+      hashesCompleted++;
+      
+      // Toy difficulty check: hash starting with "0000"
+      if (hash.startsWith('0000')) {
+        fakeShareCount++;
+      }
     }
   }
   
@@ -179,17 +300,19 @@ function mineBatch() {
 
 // Worker message handler
 self.onmessage = function(e) {
-  const { type, data } = e.data;
+  const { type, data, realShareMode: mode } = e.data;
   
   switch (type) {
     case 'start':
       if (!isRunning) {
         isRunning = true;
+        realShareMode = mode || false;
         hashesCompleted = 0;
         fakeShareCount = 0;
         lastReportTime = performance.now();
         startNonce = Math.floor(Math.random() * 0xffffffff);
         nonceCounter = 0;
+        extranonce2Counter = Math.floor(Math.random() * 0xffff);
         mineBatch();
       }
       break;
@@ -205,8 +328,15 @@ self.onmessage = function(e) {
       
     case 'job':
       currentJob = data;
+      if (data.realShareMode !== undefined) {
+        realShareMode = data.realShareMode;
+      }
+      if (data.extraNonce) {
+        extraNonce = data.extraNonce;
+      }
       // Reset nonce counter when job changes
       nonceCounter = 0;
+      extranonce2Counter = Math.floor(Math.random() * 0xffff);
       break;
       
     default:
