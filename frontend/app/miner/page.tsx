@@ -445,8 +445,21 @@ export default function MinerPage() {
   };
 
   const startRealShareMining = () => {
-    if (!workerRef.current || workerState !== 'stopped') {
-      addLog('error', 'Worker must be stopped before starting real share mining');
+    if (!workerRef.current) {
+      addLog('error', 'Worker not initialized');
+      return;
+    }
+
+    // If worker is running, stop it first
+    if (workerState === 'running' || workerState === 'starting') {
+      addLog('info', 'Stopping worker before starting real share mining...');
+      workerRef.current.postMessage({ type: 'stop' });
+      setWorkerState('stopped');
+      setIsMining(false);
+      // Wait a moment for worker to stop, then start real share mining
+      setTimeout(() => {
+        startRealShareMining();
+      }, 100);
       return;
     }
 
@@ -457,6 +470,11 @@ export default function MinerPage() {
 
     if (!currentJob || !extraNonce) {
       addLog('error', 'Cannot start mining - not connected to pool or no job received');
+      return;
+    }
+
+    if (connectionStatus !== 'connected') {
+      addLog('error', 'Cannot start mining - not connected to pool');
       return;
     }
 
@@ -736,18 +754,19 @@ export default function MinerPage() {
 
                     <button
                       onClick={startRealShareMining}
-                      disabled={workerState !== 'stopped' || !realShareMode || !currentJob || !extraNonce || connectionStatus !== 'connected'}
+                      disabled={!realShareMode || !currentJob || !extraNonce || connectionStatus !== 'connected' || workerState === 'error'}
                       className="px-4 py-2 rounded font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       title={
                         !realShareMode ? 'Enable Real Share Mode first' :
                         !extraNonce ? 'Waiting for subscription response...' :
                         !currentJob ? 'Waiting for mining.notify job from pool...' :
                         connectionStatus !== 'connected' ? 'Connect to pool first' :
-                        workerState !== 'stopped' ? 'Stop worker first' :
+                        workerState === 'error' ? 'Worker has an error - refresh page' :
+                        workerState === 'running' ? 'Will stop worker and start real share mining' :
                         'Start real share mining'
                       }
                     >
-                      Start Real Share Mining
+                      {workerState === 'running' ? 'Switch to Real Share Mining' : 'Start Real Share Mining'}
                       {connectionStatus === 'connected' && extraNonce && !currentJob && (
                         <span className="ml-2 text-xs">(waiting for job...)</span>
                       )}
