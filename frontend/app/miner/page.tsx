@@ -38,12 +38,10 @@ const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://ws.minr.online/ws/stratu
 export default function MinerPage() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [isMining, setIsMining] = useState(false);
-  const [realShareMode, setRealShareMode] = useState(false);
   const [desiredDifficulty, setDesiredDifficulty] = useState(16);
   const [nonceStride, setNonceStride] = useState(1);
   const [hashesPerSecond, setHashesPerSecond] = useState(0);
   const [totalHashes, setTotalHashes] = useState(0);
-  const [fakeShares, setFakeShares] = useState(0);
   const [realShares, setRealShares] = useState(0);
   const [lastSubmitResult, setLastSubmitResult] = useState<string | null>(null);
   const [lastSubmitTime, setLastSubmitTime] = useState<number | null>(null);
@@ -87,18 +85,11 @@ export default function MinerPage() {
 
       // Handle worker messages
       worker.onmessage = (e) => {
-        const { type, hashesCompleted, hashesPerSecond, fakeShareCount, share } = e.data;
+        const { type, hashesCompleted, hashesPerSecond, share } = e.data;
 
         if (type === 'progress') {
           setHashesPerSecond(hashesPerSecond);
           setTotalHashes((prev) => prev + hashesCompleted);
-          setFakeShares((prev) => {
-            if (fakeShareCount > prev) {
-              addLog('demo', `🎉 Fake share found! (toy target) - Total: ${fakeShareCount}`);
-              return fakeShareCount;
-            }
-            return prev;
-          });
         } else if (type === 'shareFound') {
           // Real share found - submit to pool
           addLog('info', `Worker found share: job=${share.jobId}, nonce=${share.nonce}`);
@@ -109,8 +100,7 @@ export default function MinerPage() {
           setWorkerState('stopped');
           setIsMining(false);
           setTotalHashes((prev) => prev + hashesCompleted);
-          setFakeShares(fakeShareCount);
-          addLog('info', 'Worker stopped');
+          addLog('info', 'Mining stopped');
         }
       };
 
@@ -161,7 +151,6 @@ export default function MinerPage() {
       
       const jobData = {
         ...jobWithDifficulty,
-        realShareMode,
         extraNonce,
         nonceStart: nonceSeedRef.current,
         nonceStride: nonceStride,
@@ -175,7 +164,7 @@ export default function MinerPage() {
       const jobDifficulty = jobWithDifficulty.difficulty || difficulty || 'unknown';
       addLog('info', `Worker received job: ${currentJob.jobId} (difficulty: ${jobDifficulty})`);
     }
-  }, [currentJob?.jobId, realShareMode, extraNonce, nonceStride, connectionStatus, difficulty]);
+  }, [currentJob?.jobId, extraNonce, nonceStride, connectionStatus, difficulty]);
 
   // Check for high difficulty warning (no submits after 60 seconds)
   useEffect(() => {
@@ -327,9 +316,9 @@ export default function MinerPage() {
                   : null
               );
               addLog('info', `Difficulty set to: ${newDifficulty} (target: ${target.substring(0, 16)}...)`);
-              if (realShareMode && newDifficulty >= 1000) {
+              if (newDifficulty >= 1000) {
                 addLog('error', `⚠️ High difficulty (${newDifficulty}) - browsers may not find shares`);
-              } else if (realShareMode && newDifficulty <= 100) {
+              } else if (newDifficulty <= 100) {
                 addLog('info', `✅ Low difficulty (${newDifficulty}) - good for browser mining!`);
               }
             }
@@ -407,62 +396,49 @@ export default function MinerPage() {
     return target.toString(16).padStart(64, '0');
   };
 
-  // Unified start mining function - respects Real Share Mode toggle
+  // Start mining function - always uses real share mode
   const startMining = () => {
     if (!workerRef.current || workerState !== 'stopped') {
       return;
     }
 
-    // Check if real share mode is possible
-    const canUseRealMode = realShareMode && currentJob && extraNonce && connectionStatus === 'connected';
-    
-    if (realShareMode && !canUseRealMode) {
-      // Real Share Mode is ON but conditions aren't met
+    // Check if we have everything needed for real mining
+    if (!currentJob || !extraNonce || connectionStatus !== 'connected') {
       const reasons = [];
-      if (!connectionStatus || connectionStatus !== 'connected') reasons.push('not connected to pool');
+      if (connectionStatus !== 'connected') reasons.push('not connected to pool');
       if (!extraNonce) reasons.push('not subscribed');
       if (!currentJob) reasons.push('no job received');
-      addLog('error', `Cannot start real share mining: ${reasons.join(', ')}. Connect to pool and wait for a job.`);
+      addLog('error', `Cannot start mining: ${reasons.join(', ')}. Connect to pool and wait for a job.`);
       return;
     }
 
     setWorkerState('starting');
     setWorkerError(null);
     setTotalHashes(0);
-    setFakeShares(0);
     
-    // Send job data if available
-    if (currentJob) {
-      workerRef.current.postMessage({
-        type: 'job',
-        data: {
-          ...currentJob,
-          realShareMode: canUseRealMode,
-          extraNonce: extraNonce || { extranonce1: '', extranonce2Size: 4 },
-          nonceStart: nonceSeedRef.current,
-          nonceStride: nonceStride,
-        },
-      });
-    }
+    // Send job data
+    workerRef.current.postMessage({
+      type: 'job',
+      data: {
+        ...currentJob,
+        extraNonce,
+        nonceStart: nonceSeedRef.current,
+        nonceStride: nonceStride,
+      },
+    });
     
     workerRef.current.postMessage({ 
       type: 'start', 
-      realShareMode: canUseRealMode,
       nonceStart: nonceSeedRef.current,
       nonceStride: nonceStride,
     });
     
     setWorkerState('running');
     setIsMining(true);
-    
-    if (canUseRealMode) {
-      setMiningStartTime(Date.now());
-      setRealShares(0);
-      setLastSubmitResult(null);
-      addLog('info', `✅ Real share mining started (difficulty: ${difficulty || 'unknown'}, stride: ${nonceStride})`);
-    } else {
-      addLog('info', `Mining started (demo mode - hashrate only)`);
-    }
+    setMiningStartTime(Date.now());
+    setRealShares(0);
+    setLastSubmitResult(null);
+    addLog('info', `✅ Mining started (difficulty: ${difficulty || 'unknown'}, stride: ${nonceStride})`);
   };
 
   const stopMining = () => {
@@ -538,7 +514,7 @@ export default function MinerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -549,7 +525,7 @@ export default function MinerPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Card */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
+            <div className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-6 shadow-xl">
               <h2 className="text-2xl font-semibold mb-4">Mining Dashboard</h2>
 
               <div className="space-y-4">
@@ -598,8 +574,8 @@ export default function MinerPage() {
                   )}
                 </div>
 
-                {realShareMode && difficulty && difficulty >= 1000 && (
-                  <div className="bg-red-900/30 border border-red-600 rounded p-3">
+                {difficulty && difficulty >= 1000 && (
+                  <div className="bg-red-900/30 border border-red-600 rounded p-3 backdrop-blur-sm bg-red-900/20 border-red-500/30">
                     <p className="text-red-400 font-semibold">
                       ⚠️ High Difficulty Warning
                     </p>
@@ -614,19 +590,8 @@ export default function MinerPage() {
                   </div>
                 )}
 
-                {fakeShares > 0 && !realShareMode && (
-                  <div className="bg-yellow-900/30 border border-yellow-600 rounded p-3">
-                    <p className="text-yellow-400">
-                      🎉 Fake Shares Found: <span className="font-bold">{fakeShares}</span>
-                    </p>
-                    <p className="text-xs text-yellow-300 mt-1">
-                      (Toy target - not real pool validation)
-                    </p>
-                  </div>
-                )}
-
                 {realShares > 0 && (
-                  <div className="bg-green-900/30 border border-green-600 rounded p-3">
+                  <div className="backdrop-blur-sm bg-green-900/20 border border-green-500/30 rounded p-3">
                     <p className="text-green-400">
                       ✅ Shares Submitted: <span className="font-bold">{realShares}</span>
                     </p>
@@ -639,23 +604,6 @@ export default function MinerPage() {
                 )}
 
                 <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={realShareMode}
-                        onChange={(e) => {
-                          setRealShareMode(e.target.checked);
-                          if (e.target.checked && difficulty && difficulty >= 1000) {
-                            addLog('error', `⚠️ Real Share Mode enabled at difficulty ${difficulty}`);
-                          }
-                        }}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-sm">Real Share Mode</span>
-                    </label>
-                  </div>
-
                   {connectionStatus === 'connected' && (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -678,7 +626,7 @@ export default function MinerPage() {
                               addLog('client', `→ Suggest difficulty: ${val}`);
                             }
                           }}
-                          className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
+                          className="w-full px-2 py-1 backdrop-blur-sm bg-white/5 border border-white/10 rounded text-white text-sm"
                         />
                         <p className="text-xs text-gray-500 mt-1">Default: 16</p>
                       </div>
@@ -697,7 +645,6 @@ export default function MinerPage() {
                                 type: 'job',
                                 data: {
                                   ...currentJob,
-                                  realShareMode,
                                   extraNonce,
                                   nonceStart: nonceSeedRef.current,
                                   nonceStride: val,
@@ -705,7 +652,7 @@ export default function MinerPage() {
                               });
                             }
                           }}
-                          className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
+                          className="w-full px-2 py-1 backdrop-blur-sm bg-white/5 border border-white/10 rounded text-white text-sm"
                         />
                         <p className="text-xs text-gray-500 mt-1">Prevents overlap</p>
                       </div>
@@ -718,26 +665,24 @@ export default function MinerPage() {
                     <button
                       onClick={workerState === 'running' ? stopMining : startMining}
                       disabled={workerState === 'error' || workerState === 'starting'}
-                      className={`px-6 py-3 rounded-lg font-semibold text-lg ${
+                      className={`px-6 py-3 rounded-lg font-semibold text-lg backdrop-blur-md border ${
                         workerState === 'running'
-                          ? 'bg-red-600 hover:bg-red-700'
-                          : 'bg-green-600 hover:bg-green-700'
+                          ? 'bg-red-600/80 hover:bg-red-600 border-red-500/30'
+                          : 'bg-green-600/80 hover:bg-green-600 border-green-500/30'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                       title={
                         workerState === 'running' ? 'Stop mining' :
-                        realShareMode && (!currentJob || !extraNonce || connectionStatus !== 'connected')
-                          ? 'Real Share Mode requires: Connect to pool and wait for job'
-                          : realShareMode
-                          ? 'Start real share mining (will submit shares to pool)'
-                          : 'Start demo mining (hashrate only, no shares submitted)'
+                        (!currentJob || !extraNonce || connectionStatus !== 'connected')
+                          ? 'Connect to pool and wait for job'
+                          : 'Start mining (will submit shares to pool)'
                       }
                     >
                       {workerState === 'running' ? '⏹ Stop Mining' : '▶ Start Mining'}
-                      {workerState === 'stopped' && realShareMode && (
+                      {workerState === 'stopped' && (
                         <span className="ml-2 text-xs block mt-1 opacity-75">
                           {connectionStatus === 'connected' && extraNonce && currentJob
-                            ? '(Real Share Mode)'
-                            : '(Real Share Mode - needs connection)'}
+                            ? 'Ready to mine'
+                            : 'Needs connection'}
                         </span>
                       )}
                     </button>
@@ -745,26 +690,26 @@ export default function MinerPage() {
                     {connectionStatus === 'disconnected' || connectionStatus === 'error' ? (
                       <button
                         onClick={connectWebSocket}
-                        className="px-4 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-700"
+                        className="px-4 py-3 rounded-lg font-semibold backdrop-blur-md bg-blue-600/80 hover:bg-blue-600 border border-blue-500/30"
                       >
                         🔌 Connect Pool
                       </button>
                     ) : (
                       <button
                         onClick={disconnectWebSocket}
-                        className="px-4 py-3 rounded-lg font-semibold bg-red-600 hover:bg-red-700"
+                        className="px-4 py-3 rounded-lg font-semibold backdrop-blur-md bg-red-600/80 hover:bg-red-600 border border-red-500/30"
                       >
                         🔌 Disconnect Pool
                       </button>
                     )}
                   </div>
                   
-                  {realShareMode && workerState === 'stopped' && (
+                  {workerState === 'stopped' && (
                     <div className="text-xs text-gray-400 mt-2">
                       {connectionStatus !== 'connected' && '⚠️ Connect to pool first'}
                       {connectionStatus === 'connected' && !extraNonce && '⚠️ Waiting for subscription...'}
                       {connectionStatus === 'connected' && extraNonce && !currentJob && '⚠️ Waiting for job from pool...'}
-                      {connectionStatus === 'connected' && extraNonce && currentJob && '✅ Ready for real share mining'}
+                      {connectionStatus === 'connected' && extraNonce && currentJob && '✅ Ready to mine'}
                     </div>
                   )}
                 </div>
@@ -780,7 +725,7 @@ export default function MinerPage() {
 
             {/* ExtraNonce Panel */}
             {extraNonce && (
-              <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
+              <div className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-6 shadow-xl">
                 <h2 className="text-2xl font-semibold mb-4">ExtraNonce</h2>
                 <div className="space-y-3 font-mono text-sm">
                   <div>
@@ -797,7 +742,7 @@ export default function MinerPage() {
 
             {/* Current Job Panel */}
             {currentJob && (
-              <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
+              <div className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-6 shadow-xl">
                 <h2 className="text-2xl font-semibold mb-4">Current Job</h2>
                 <div className="space-y-3 font-mono text-sm">
                   <div>
@@ -855,7 +800,7 @@ export default function MinerPage() {
 
           {/* Stratum Log */}
           <div className="lg:col-span-1">
-            <div className="bg-gray-800 rounded-lg p-6 shadow-lg h-[600px] flex flex-col">
+            <div className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-6 shadow-xl h-[600px] flex flex-col">
               <h2 className="text-2xl font-semibold mb-4">Stratum Log</h2>
               <div className="flex-1 overflow-y-auto font-mono text-xs space-y-1">
                 {logs.length === 0 ? (
@@ -871,7 +816,7 @@ export default function MinerPage() {
               </div>
               <button
                 onClick={() => setLogs([])}
-                className="mt-4 px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded"
+                className="mt-4 px-3 py-1 text-sm backdrop-blur-sm bg-white/5 hover:bg-white/10 border border-white/10 rounded"
               >
                 Clear Log
               </button>

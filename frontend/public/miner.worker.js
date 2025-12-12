@@ -211,89 +211,98 @@ function hashMeetsTarget(hashBytes, targetHex) {
 // Worker state
 let isRunning = false;
 let currentJob = null;
-let realShareMode = false;
 let extraNonce = null;
 let extranonce2Counter = 0;
 let nonceStart = 0;
 let nonceStride = 1;
 let nonceCounter = 0;
 let hashesCompleted = 0;
-let fakeShareCount = 0;
 let lastReportTime = performance.now();
 let batchSize = 50000; // 50k nonces per batch
+
+// Cache for merkle root per extranonce2 (performance optimization)
+let cachedExtranonce2 = null;
+let cachedMerkleRootBytes = null;
 
 function mineBatch() {
   if (!isRunning || !currentJob) {
     return;
   }
   
-  const batchStartTime = performance.now();
-  let batchHashes = 0;
+  // Only real share mode now - always use real mining
+  if (!currentJob.coinb1 || !currentJob.coinb2 || !extraNonce || !currentJob.target) {
+    // Not ready - skip batch
+    return;
+  }
   
+  // Pre-compute header parts that don't change (everything except nonce)
+  const versionBytes = hexToBytes(reverseHex((currentJob.version || '20000000').padStart(8, '0')));
+  const prevhashBytes = hexToBytes(reverseHex(currentJob.prevhash));
+  const ntimeBytes = hexToBytes(reverseHex(currentJob.nTime.padStart(8, '0')));
+  const nbitsBytes = hexToBytes(reverseHex(currentJob.nBits.padStart(8, '0')));
+  
+  // Pre-assemble header parts 0-75 (everything except nonce at bytes 76-79)
+  const headerPrefix = new Uint8Array(76);
+  headerPrefix.set(versionBytes, 0);
+  headerPrefix.set(prevhashBytes, 4);
+  headerPrefix.set(ntimeBytes, 68);
+  headerPrefix.set(nbitsBytes, 72);
+  
+  // Process batch with optimized loop
   for (let i = 0; i < batchSize; i++) {
     // Use stride: nonce = start + (counter * stride) mod 2^32
     const nonce = (nonceStart + (nonceCounter * nonceStride)) & 0xffffffff;
     nonceCounter++;
     
-    if (realShareMode && currentJob.coinb1 && currentJob.coinb2 && extraNonce && currentJob.target) {
-      // Real share mode: assemble proper block header
-      try {
-        // Generate extranonce2 (incrementing counter, hex string)
-        const extranonce2Hex = extranonce2Counter.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
-        
-        // Assemble coinbase: coinb1 + extranonce1 + extranonce2 + coinb2
+    try {
+      // Check if we need to recompute merkle root (extranonce2 changed)
+      const extranonce2Hex = extranonce2Counter.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
+      
+      if (cachedExtranonce2 !== extranonce2Counter) {
+        // Recompute coinbase and merkle root for this extranonce2
         const coinbaseHex = currentJob.coinb1 + extraNonce.extranonce1 + extranonce2Hex + currentJob.coinb2;
         const coinbaseBytes = hexToBytes(coinbaseHex);
-        
-        // coinbase_hash = dblSHA256(coinbase bytes)
         const coinbaseHashBytes = sha256(sha256(coinbaseBytes));
         const coinbaseHashHex = bytesToHex(coinbaseHashBytes);
-        
-        // Build merkle root (returns 32-byte buffer in little-endian)
-        const merkleRootBytes = buildMerkleRoot(coinbaseHashHex, currentJob.merkleBranches || []);
-        
-        // Assemble block header (80 bytes, all little-endian)
-        const headerBytes = assembleBlockHeader(
-          currentJob.version || '20000000',
-          currentJob.prevhash,
-          merkleRootBytes,
-          currentJob.nTime,
-          currentJob.nBits,
-          nonce
-        );
-        
-        // Hash block header (double SHA256)
-        const headerHashBytes = sha256(sha256(headerBytes));
-        hashesCompleted++;
-        
-        // Check against target (compare hash to target)
-        if (hashMeetsTarget(headerHashBytes, currentJob.target)) {
-          // Share found!
-          const headerHashHex = bytesToHex(headerHashBytes);
-          self.postMessage({
-            type: 'shareFound',
-            share: {
-              jobId: currentJob.jobId,
-              extranonce2: extranonce2Hex,
-              ntime: currentJob.nTime,
-              nonce: nonce.toString(16).padStart(8, '0'),
-              headerHash: reverseHex(headerHashHex), // Convert to big-endian for display
-            },
-          });
-        }
-        
-        // Increment extranonce2 periodically to explore more coinbase variations
-        // When nonce counter reaches a threshold, increment extranonce2
-        if (nonceCounter > 0 && nonceCounter % 100000 === 0) {
-          extranonce2Counter++;
-        }
-      } catch (error) {
-        console.error('Mining error:', error);
-        // Don't fallback - just skip this hash
-        hashesCompleted++;
+        cachedMerkleRootBytes = hexToBytes(buildMerkleRoot(coinbaseHashHex, currentJob.merkleBranches || []));
+        cachedExtranonce2 = extranonce2Counter;
       }
-    } else {
-      // Not ready for real mining - skip
+      
+      // Assemble full header (only nonce changes)
+      const headerBytes = new Uint8Array(80);
+      headerBytes.set(headerPrefix, 0);
+      headerBytes.set(cachedMerkleRootBytes, 36); // merkle root at bytes 36-67
+      const nonceView = new DataView(headerBytes.buffer);
+      nonceView.setUint32(76, nonce, true); // nonce at bytes 76-79 (little-endian)
+      
+      // Hash block header (double SHA256)
+      const headerHashBytes = sha256(sha256(headerBytes));
+      hashesCompleted++;
+      
+      // Check against target
+      if (hashMeetsTarget(headerHashBytes, currentJob.target)) {
+        // Share found!
+        const headerHashHex = bytesToHex(headerHashBytes);
+        const extranonce2Hex = cachedExtranonce2.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
+        self.postMessage({
+          type: 'shareFound',
+          share: {
+            jobId: currentJob.jobId,
+            extranonce2: extranonce2Hex,
+            ntime: currentJob.nTime,
+            nonce: nonce.toString(16).padStart(8, '0'),
+            headerHash: reverseHex(headerHashHex),
+          },
+        });
+      }
+      
+      // Increment extranonce2 periodically (every 100k nonces)
+      if (nonceCounter > 0 && nonceCounter % 100000 === 0) {
+        extranonce2Counter++;
+        cachedExtranonce2 = null; // Force recompute on next iteration
+      }
+    } catch (error) {
+      console.error('Mining error:', error);
       hashesCompleted++;
     }
   }
@@ -309,7 +318,7 @@ function mineBatch() {
       type: 'progress',
       hashesCompleted,
       hashesPerSecond,
-      fakeShareCount,
+      fakeShareCount: 0, // No fake shares in real mode
     });
     
     hashesCompleted = 0;
@@ -324,15 +333,13 @@ function mineBatch() {
 
 // Worker message handler
 self.onmessage = function(e) {
-  const { type, data, realShareMode: mode } = e.data;
+  const { type, data } = e.data;
   
   switch (type) {
     case 'start':
       if (!isRunning) {
         isRunning = true;
-        realShareMode = mode || false;
         hashesCompleted = 0;
-        fakeShareCount = 0;
         lastReportTime = performance.now();
         // Use provided nonceStart and nonceStride, or generate random
         if (e.data.nonceStart !== undefined) {
@@ -347,6 +354,8 @@ self.onmessage = function(e) {
         }
         nonceCounter = 0;
         extranonce2Counter = Math.floor(Math.random() * 0xffff);
+        cachedExtranonce2 = null; // Reset cache
+        cachedMerkleRootBytes = null;
         mineBatch();
       }
       break;
@@ -356,15 +365,12 @@ self.onmessage = function(e) {
       self.postMessage({
         type: 'stopped',
         hashesCompleted,
-        fakeShareCount,
+        fakeShareCount: 0,
       });
       break;
       
     case 'job':
       currentJob = data;
-      if (data.realShareMode !== undefined) {
-        realShareMode = data.realShareMode;
-      }
       if (data.extraNonce) {
         extraNonce = data.extraNonce;
       }
@@ -377,6 +383,8 @@ self.onmessage = function(e) {
       // Reset nonce counter when job changes
       nonceCounter = 0;
       extranonce2Counter = Math.floor(Math.random() * 0xffff);
+      cachedExtranonce2 = null; // Reset cache on new job
+      cachedMerkleRootBytes = null;
       break;
       
     default:
