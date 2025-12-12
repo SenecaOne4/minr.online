@@ -19,10 +19,13 @@ export default function LoginPage() {
       return;
     }
 
+    // Use production URL for email redirects, fallback to current origin
+    const redirectUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/`,
+        emailRedirectTo: `${redirectUrl}/`,
       },
     });
 
