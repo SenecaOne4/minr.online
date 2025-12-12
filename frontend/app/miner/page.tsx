@@ -255,6 +255,7 @@ export default function MinerPage() {
           // Handle mining.notify (full params)
           if (parsed.method === 'mining.notify') {
             const params = parsed.params || [];
+            addLog('info', `Received mining.notify with ${params.length} params`);
             if (params.length >= 9) {
               const job: CurrentJob = {
                 jobId: params[0] || '',
@@ -270,10 +271,12 @@ export default function MinerPage() {
                 target: difficulty ? computeTarget(difficulty) : undefined,
               };
               setCurrentJob(job);
-              addLog('info', `New job received: ${job.jobId}`);
+              addLog('info', `✅ New job received: ${job.jobId} (prevhash: ${job.prevhash.substring(0, 16)}...)`);
               if (job.cleanJobs) {
                 addLog('info', 'Clean jobs flag set - reset worker');
               }
+            } else {
+              addLog('error', `⚠️ mining.notify has insufficient params (got ${params.length}, need 9)`);
             }
           }
 
@@ -315,7 +318,11 @@ export default function MinerPage() {
           }
           } catch (parseError) {
             // Not JSON or parse failed - skip this line, already logged as raw text
-            console.warn('Failed to parse JSON line:', line);
+            // Only log if it looks like it might be JSON (starts with { or [)
+            if (line.trim().startsWith('{') || line.trim().startsWith('[')) {
+              console.warn('Failed to parse JSON line:', line);
+              addLog('error', `Failed to parse JSON: ${line.substring(0, 100)}`);
+            }
           }
         }
       };
