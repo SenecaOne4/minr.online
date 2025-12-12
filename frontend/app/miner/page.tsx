@@ -77,8 +77,9 @@ export default function MinerPage() {
     setWorkerError(null);
     
     try {
-      // Create worker
-      const worker = new Worker('/miner.worker.js');
+      // Create worker with cache-busting query param
+      const workerUrl = `/miner.worker.js?v=${Date.now()}`;
+      const worker = new Worker(workerUrl);
       workerRef.current = worker;
       addLog('info', 'Worker created');
       setWorkerState('stopped');
