@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import LoginPage from '@/components/LoginPage';
 import DashboardPage from '@/components/DashboardPage';
 import HeroSection from '@/components/HeroSection';
+import SiteMeta from '@/components/SiteMeta';
 
 interface SiteSettings {
   hero_title?: string;
