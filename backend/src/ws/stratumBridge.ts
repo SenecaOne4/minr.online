@@ -122,8 +122,8 @@ export function handleStratumConnection(ws: WebSocket): void {
       if (parsed && typeof parsed === 'object' && parsed.method === 'mining.subscribe') {
         console.log('[bridge] subscribe from client, forwarding to upstream');
         
-        // Forward the original subscribe message to TCP
-        const outboundStr = messageStr;
+        // Forward the original subscribe message to TCP (add newline for Stratum protocol)
+        const outboundStr = messageStr.trim() + '\n';
         console.log('[bridge] → upstream', outboundStr.slice(0, 200));
         tcpSocket.write(outboundStr);
         
@@ -137,8 +137,8 @@ export function handleStratumConnection(ws: WebSocket): void {
       // Check if this is a mining.authorize message from frontend
       if (parsed && typeof parsed === 'object' && parsed.method === 'mining.authorize') {
         console.log('[bridge] authorize from client, forwarding to upstream');
-        // Forward as-is - frontend handles the credentials
-        tcpSocket.write(messageStr);
+        // Forward as-is with newline (Stratum protocol requires newline)
+        tcpSocket.write(messageStr.trim() + '\n');
         return;
       }
 
@@ -153,8 +153,8 @@ export function handleStratumConnection(ws: WebSocket): void {
           nonce: submitParams[4],
         });
         
-        // Forward to TCP upstream
-        tcpSocket.write(messageStr);
+        // Forward to TCP upstream (add newline for Stratum protocol)
+        tcpSocket.write(messageStr.trim() + '\n');
         return;
       }
     } catch (parseError) {
@@ -165,8 +165,8 @@ export function handleStratumConnection(ws: WebSocket): void {
       }
     }
     
-    // Forward all other messages unchanged
-    const outboundStr = messageStr;
+    // Forward all other messages unchanged (add newline for Stratum protocol)
+    const outboundStr = messageStr.trim() + '\n';
     console.log('[bridge] → upstream', outboundStr.slice(0, 200));
     tcpSocket.write(outboundStr);
   });
