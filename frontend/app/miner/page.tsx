@@ -141,22 +141,41 @@ export default function MinerPage() {
   }, []);
 
   // Auto-send job to worker when WS connects and job is received
+  // Use a ref to track last job ID to prevent duplicate sends
+  const lastJobIdRef = useRef<string | null>(null);
+  
   useEffect(() => {
     if (workerRef.current && currentJob && extraNonce && connectionStatus === 'connected') {
-      const jobData = {
+      // Prevent duplicate sends for the same job
+      if (lastJobIdRef.current === currentJob.jobId) {
+        return;
+      }
+      lastJobIdRef.current = currentJob.jobId;
+      
+      // Merge current difficulty into job if not already set
+      const jobWithDifficulty = {
         ...currentJob,
+        difficulty: currentJob.difficulty || difficulty || undefined,
+        target: currentJob.target || (difficulty ? computeTarget(difficulty) : undefined),
+      };
+      
+      const jobData = {
+        ...jobWithDifficulty,
         realShareMode,
         extraNonce,
         nonceStart: nonceSeedRef.current,
         nonceStride: nonceStride,
       };
+      
       workerRef.current.postMessage({
         type: 'job',
         data: jobData,
       });
-      addLog('info', `Worker received job: ${currentJob.jobId} (difficulty: ${currentJob.difficulty || 'unknown'})`);
+      
+      const jobDifficulty = jobWithDifficulty.difficulty || difficulty || 'unknown';
+      addLog('info', `Worker received job: ${currentJob.jobId} (difficulty: ${jobDifficulty})`);
     }
-  }, [currentJob, realShareMode, extraNonce, nonceStride, connectionStatus]);
+  }, [currentJob?.jobId, realShareMode, extraNonce, nonceStride, connectionStatus, difficulty]);
 
   // Check for high difficulty warning (no submits after 60 seconds)
   useEffect(() => {
@@ -268,25 +287,29 @@ export default function MinerPage() {
             addLog('info', `Received mining.notify with ${params.length} params`);
             if (params.length >= 9) {
               // Use current difficulty state (may have been set by mining.set_difficulty)
-              const currentDifficulty = difficulty;
-              const job: CurrentJob = {
-                jobId: params[0] || '',
-                prevhash: params[1] || '',
-                coinb1: params[2] || '',
-                coinb2: params[3] || '',
-                merkleBranches: Array.isArray(params[4]) ? params[4] : [],
-                version: params[5] || '',
-                nBits: params[6] || '',
-                nTime: params[7] || '',
-                cleanJobs: params[8] === true,
-                difficulty: currentDifficulty || undefined,
-                target: currentDifficulty ? computeTarget(currentDifficulty) : undefined,
-              };
-              setCurrentJob(job);
-              addLog('info', `✅ New job received: ${job.jobId} (prevhash: ${job.prevhash.substring(0, 16)}..., difficulty: ${currentDifficulty || 'unknown'})`);
-              if (job.cleanJobs) {
-                addLog('info', 'Clean jobs flag set - reset worker');
-              }
+              // Use a ref or closure to get the latest difficulty value
+              setDifficulty((prevDiff) => {
+                const currentDifficulty = prevDiff || difficulty;
+                const job: CurrentJob = {
+                  jobId: params[0] || '',
+                  prevhash: params[1] || '',
+                  coinb1: params[2] || '',
+                  coinb2: params[3] || '',
+                  merkleBranches: Array.isArray(params[4]) ? params[4] : [],
+                  version: params[5] || '',
+                  nBits: params[6] || '',
+                  nTime: params[7] || '',
+                  cleanJobs: params[8] === true,
+                  difficulty: currentDifficulty || undefined,
+                  target: currentDifficulty ? computeTarget(currentDifficulty) : undefined,
+                };
+                setCurrentJob(job);
+                addLog('info', `✅ New job received: ${job.jobId} (prevhash: ${job.prevhash.substring(0, 16)}..., difficulty: ${currentDifficulty || 'unknown'})`);
+                if (job.cleanJobs) {
+                  addLog('info', 'Clean jobs flag set - reset worker');
+                }
+                return prevDiff; // Don't change difficulty state
+              });
             } else {
               addLog('error', `⚠️ mining.notify has insufficient params (got ${params.length}, need 9)`);
             }
