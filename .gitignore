@@ -10,4 +10,7 @@ out/
 *.swp
 *.swo
 *~
+# Next.js generated files
+next-env.d.ts
+.env.local
 
