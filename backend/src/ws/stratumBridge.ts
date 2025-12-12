@@ -41,12 +41,21 @@ export function handleStratumConnection(ws: WebSocket): void {
     
     // Check for mining.submit response
     try {
-      const parsed = JSON.parse(chunk.trim());
-      if (parsed.id && parsed.id >= 3 && parsed.id < 100) {
-        if (parsed.result === true) {
-          console.log('[bridge] ✅ Submit SUCCESS (ID:', parsed.id, ')');
-        } else {
-          console.log('[bridge] ❌ Submit FAILED (ID:', parsed.id, '):', parsed.error || 'Unknown error');
+      // Handle multiple JSON messages in one chunk (Stratum can send multiple lines)
+      const lines = chunk.trim().split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.id && parsed.id >= 3 && parsed.id < 100) {
+            if (parsed.result === true) {
+              console.log('[bridge] ✅ Submit SUCCESS (ID:', parsed.id, ')');
+            } else {
+              console.log('[bridge] ❌ Submit FAILED (ID:', parsed.id, '):', parsed.error || 'Unknown error');
+            }
+          }
+        } catch (e) {
+          // Skip invalid JSON lines
         }
       }
     } catch (e) {
@@ -120,8 +129,7 @@ export function handleStratumConnection(ws: WebSocket): void {
       // Check if this is a mining.submit message
       if (parsed && typeof parsed === 'object' && parsed.method === 'mining.submit') {
         const submitParams = parsed.params || [];
-        console.log('[bridge] ← client submit:', {
-          id: parsed.id,
+        console.log('[bridge] ← client submit (ID:', parsed.id, '):', {
           worker: submitParams[0],
           jobId: submitParams[1],
           extranonce2: submitParams[2],
@@ -129,7 +137,7 @@ export function handleStratumConnection(ws: WebSocket): void {
           nonce: submitParams[4],
         });
         
-        // Forward to TCP (will be logged when response comes back)
+        // Forward to TCP upstream
         tcpSocket.write(messageStr);
         return;
       }

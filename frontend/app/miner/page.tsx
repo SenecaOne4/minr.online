@@ -48,6 +48,7 @@ export default function MinerPage() {
   const [extraNonce, setExtraNonce] = useState<ExtraNonce | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const submitIdRef = useRef(3);
+  const sessionIdRef = useRef(`browser-${Date.now()}`);
 
   const wsRef = useRef<WebSocket | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -85,7 +86,7 @@ export default function MinerPage() {
           }
           return prev;
         });
-      } else if (type === 'share') {
+      } else if (type === 'shareFound') {
         // Real share found - submit to pool
         if (share && wsRef.current?.readyState === WebSocket.OPEN) {
           submitRealShare(share);
@@ -172,6 +173,18 @@ export default function MinerPage() {
               const extranonce2Size = result[2] || 4;
               setExtraNonce({ extranonce1, extranonce2Size });
               addLog('info', `ExtraNonce: ${extranonce1}, size: ${extranonce2Size}`);
+              
+              // Send mining.authorize after subscribe response
+              const authorizeMsg = {
+                id: 2,
+                method: 'mining.authorize',
+                params: [
+                  process.env.NEXT_PUBLIC_BTC_MINING_USERNAME || BTC_MINING_USERNAME,
+                  process.env.NEXT_PUBLIC_BTC_MINING_PASSWORD || 'x',
+                ],
+              };
+              ws.send(JSON.stringify(authorizeMsg));
+              addLog('client', `→ ${JSON.stringify(authorizeMsg)}`);
             }
           }
 
@@ -266,10 +279,13 @@ export default function MinerPage() {
     addLog('info', 'Disconnected from pool');
   };
 
-  // Compute target from difficulty
+  // Compute target from difficulty (Bitcoin stratum share target standard)
   const computeTarget = (diff: number): string => {
-    // Target = (2^256) / (difficulty * 2^32)
-    // For share validation, we compare header hash to target
+    // target = floor(2^224 / difficulty) for difficulty > 0
+    // 2^224 = 0x00000000ffff0000000000000000000000000000000000000000000000000000
+    if (diff <= 0) {
+      return '00000000ffff0000000000000000000000000000000000000000000000000000';
+    }
     const maxTarget = BigInt('0x00000000ffff0000000000000000000000000000000000000000000000000000');
     const target = maxTarget / BigInt(Math.floor(diff));
     return target.toString(16).padStart(64, '0');
@@ -277,6 +293,17 @@ export default function MinerPage() {
 
   const startMining = () => {
     if (workerRef.current && !workerRunning) {
+      // Only allow real share mode - no demo mode
+      if (!realShareMode) {
+        addLog('error', 'Please enable Real Share Mode to start mining');
+        return;
+      }
+
+      if (!currentJob || !extraNonce) {
+        addLog('error', 'Cannot start mining - not connected to pool or no job received');
+        return;
+      }
+
       setIsMining(true);
       setWorkerRunning(true);
       setTotalHashes(0);
@@ -284,24 +311,18 @@ export default function MinerPage() {
       setRealShares(0);
       setLastSubmitResult(null);
       
-      // Send current job and config if available
-      if (currentJob && extraNonce) {
-        workerRef.current.postMessage({
-          type: 'job',
-          data: {
-            ...currentJob,
-            realShareMode,
-            extraNonce,
-          },
-        });
-      }
+      // Send current job and config
+      workerRef.current.postMessage({
+        type: 'job',
+        data: {
+          ...currentJob,
+          realShareMode: true,
+          extraNonce,
+        },
+      });
       
-      workerRef.current.postMessage({ type: 'start', realShareMode });
-      addLog(realShareMode ? 'info' : 'demo', 
-        realShareMode 
-          ? `Real share mining started (difficulty: ${difficulty || 'unknown'})`
-          : 'Demo mining started (Web Worker)'
-      );
+      workerRef.current.postMessage({ type: 'start', realShareMode: true });
+      addLog('info', `Real share mining started (difficulty: ${difficulty || 'unknown'})`);
     }
   };
 
@@ -331,11 +352,12 @@ export default function MinerPage() {
     }
 
     const submitId = submitIdRef.current++;
+    const workerName = process.env.NEXT_PUBLIC_WORKER_NAME || `minr.online.${sessionIdRef.current}`;
     const msg = {
       id: submitId,
       method: 'mining.submit',
       params: [
-        BTC_MINING_USERNAME, // worker name (using BTC address)
+        workerName,
         share.jobId,
         share.extranonce2,
         share.ntime,
@@ -344,7 +366,7 @@ export default function MinerPage() {
     };
 
     wsRef.current.send(JSON.stringify(msg));
-    addLog('client', `→ Submit share: job=${share.jobId}, nonce=${share.nonce}`);
+    addLog('client', `→ Submit share (ID: ${submitId}): job=${share.jobId}, nonce=${share.nonce}`);
   }
 
   const getStatusColor = (status: ConnectionStatus) => {
@@ -469,7 +491,7 @@ export default function MinerPage() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     onClick={isMining ? stopMining : startMining}
-                    disabled={connectionStatus === 'connecting'}
+                    disabled={connectionStatus === 'connecting' || !realShareMode || !currentJob || !extraNonce}
                     className={`px-4 py-2 rounded font-semibold ${
                       isMining
                         ? 'bg-red-600 hover:bg-red-700'

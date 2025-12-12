@@ -125,17 +125,26 @@ function reverseHex(hex) {
 }
 
 // Helper: Build merkle root from coinbase hash and merkle branches
-function buildMerkleRoot(coinbaseHash, merkleBranches) {
-  // Reverse coinbase hash to little-endian for merkle calculation
-  let merkleRoot = reverseHex(coinbaseHash);
+function buildMerkleRoot(coinbaseHashHex, merkleBranches) {
+  // Start with coinbase hash as 32-byte buffer (little-endian)
+  let current = hexToBytes(reverseHex(coinbaseHashHex));
+  
   for (let i = 0; i < merkleBranches.length; i++) {
-    const branch = merkleBranches[i];
-    // Concatenate (little-endian) and double SHA256
-    const combined = merkleRoot + branch;
-    const hashBytes = sha256(sha256(hexToBytes(combined)));
-    merkleRoot = bytesToHex(hashBytes);
+    const branchHex = merkleBranches[i];
+    // Convert branch to 32-byte buffer (little-endian)
+    const branch = hexToBytes(reverseHex(branchHex));
+    
+    // Concatenate: current (32 bytes) + branch (32 bytes) = 64 bytes
+    const combined = new Uint8Array(64);
+    combined.set(current, 0);
+    combined.set(branch, 32);
+    
+    // Double SHA256
+    current = sha256(sha256(combined));
   }
-  return reverseHex(merkleRoot); // Convert back to big-endian for block header
+  
+  // Convert back to hex (little-endian) for header assembly
+  return bytesToHex(current);
 }
 
 // Helper: Convert hex string to bytes
@@ -152,25 +161,51 @@ function bytesToHex(bytes) {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Helper: Assemble block header
-function assembleBlockHeader(version, prevhash, merkleRoot, ntime, nbits, nonce) {
-  // Block header: version (4) + prevhash (32) + merkle_root (32) + ntime (4) + nbits (4) + nonce (4) = 80 bytes
-  const versionHex = reverseHex(version.padStart(8, '0'));
-  const prevhashHex = reverseHex(prevhash);
-  const merkleRootHex = reverseHex(merkleRoot);
-  const ntimeHex = reverseHex(ntime.padStart(8, '0'));
-  const nbitsHex = reverseHex(nbits.padStart(8, '0'));
-  const nonceHex = reverseHex(nonce.toString(16).padStart(8, '0'));
+// Helper: Assemble block header (80 bytes, all little-endian)
+function assembleBlockHeader(versionHex, prevhashHex, merkleRootBytes, ntimeHex, nbitsHex, nonce) {
+  // version: 4-byte little-endian from hex
+  const versionBytes = hexToBytes(reverseHex(versionHex.padStart(8, '0')));
   
-  return versionHex + prevhashHex + merkleRootHex + ntimeHex + nbitsHex + nonceHex;
+  // prevhash: convert hex to bytes then reverse to little-endian (Stratum gives big-endian)
+  const prevhashBytes = hexToBytes(reverseHex(prevhashHex));
+  
+  // merkle_root: already in bytes (little-endian from buildMerkleRoot)
+  const merkleRoot = merkleRootBytes;
+  
+  // ntime: 4-byte little-endian from hex
+  const ntimeBytes = hexToBytes(reverseHex(ntimeHex.padStart(8, '0')));
+  
+  // nbits: 4-byte little-endian from hex
+  const nbitsBytes = hexToBytes(reverseHex(nbitsHex.padStart(8, '0')));
+  
+  // nonce: 4-byte little-endian integer
+  const nonceBytes = new Uint8Array(4);
+  const nonceView = new DataView(nonceBytes.buffer);
+  nonceView.setUint32(0, nonce, true); // true = little-endian
+  
+  // Assemble 80-byte header
+  const header = new Uint8Array(80);
+  header.set(versionBytes, 0);
+  header.set(prevhashBytes, 4);
+  header.set(merkleRoot, 36);
+  header.set(ntimeBytes, 68);
+  header.set(nbitsBytes, 72);
+  header.set(nonceBytes, 76);
+  
+  return header;
 }
 
-// Helper: Compare hash to target (both as hex strings)
-function hashMeetsTarget(hashHex, targetHex) {
-  // Compare as big integers (little-endian)
-  const hashRev = reverseHex(hashHex);
-  const targetRev = reverseHex(targetHex);
-  return BigInt('0x' + hashRev) <= BigInt('0x' + targetRev);
+// Helper: Compare hash to target
+// Hash is from dblSHA256(header) - result is in little-endian bytes
+// Target is big-endian hex string
+// Compare: reverse hash to big-endian hex and compare lexicographically
+function hashMeetsTarget(hashBytes, targetHex) {
+  // Convert hash bytes to big-endian hex
+  const hashHex = reverseHex(bytesToHex(hashBytes));
+  
+  // Compare lexicographically (same length hex strings)
+  // Since both are 64-char hex strings, we can compare directly
+  return hashHex <= targetHex;
 }
 
 // Worker state
@@ -197,80 +232,65 @@ function mineBatch() {
   for (let i = 0; i < batchSize; i++) {
     const nonce = startNonce + nonceCounter++;
     
-    if (realShareMode && currentJob.coinb1 && currentJob.coinb2 && extraNonce) {
+    if (realShareMode && currentJob.coinb1 && currentJob.coinb2 && extraNonce && currentJob.target) {
       // Real share mode: assemble proper block header
       try {
-        // Generate extranonce2 (incrementing counter)
+        // Generate extranonce2 (incrementing counter, hex string)
         const extranonce2Hex = extranonce2Counter.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
         
         // Assemble coinbase: coinb1 + extranonce1 + extranonce2 + coinb2
         const coinbaseHex = currentJob.coinb1 + extraNonce.extranonce1 + extranonce2Hex + currentJob.coinb2;
         const coinbaseBytes = hexToBytes(coinbaseHex);
+        
+        // coinbase_hash = dblSHA256(coinbase bytes)
         const coinbaseHashBytes = sha256(sha256(coinbaseBytes));
-        const coinbaseHash = bytesToHex(coinbaseHashBytes);
+        const coinbaseHashHex = bytesToHex(coinbaseHashBytes);
         
-        // Build merkle root
-        const merkleRoot = buildMerkleRoot(coinbaseHash, currentJob.merkleBranches || []);
+        // Build merkle root (returns 32-byte buffer in little-endian)
+        const merkleRootBytes = buildMerkleRoot(coinbaseHashHex, currentJob.merkleBranches || []);
         
-        // Assemble block header
-        const blockHeaderHex = assembleBlockHeader(
+        // Assemble block header (80 bytes, all little-endian)
+        const headerBytes = assembleBlockHeader(
           currentJob.version || '20000000',
           currentJob.prevhash,
-          merkleRoot,
+          merkleRootBytes,
           currentJob.nTime,
           currentJob.nBits,
           nonce
         );
         
         // Hash block header (double SHA256)
-        const blockHeaderBytes = hexToBytes(blockHeaderHex);
-        const headerHashBytes = sha256(sha256(blockHeaderBytes));
-        const headerHash = bytesToHex(headerHashBytes);
+        const headerHashBytes = sha256(sha256(headerBytes));
         hashesCompleted++;
         
-        // Check against target
-        if (currentJob.target && hashMeetsTarget(headerHash, currentJob.target)) {
+        // Check against target (compare hash to target)
+        if (hashMeetsTarget(headerHashBytes, currentJob.target)) {
           // Share found!
+          const headerHashHex = bytesToHex(headerHashBytes);
           self.postMessage({
-            type: 'share',
+            type: 'shareFound',
             share: {
               jobId: currentJob.jobId,
               extranonce2: extranonce2Hex,
               ntime: currentJob.nTime,
               nonce: nonce.toString(16).padStart(8, '0'),
-              headerHash: headerHash,
+              headerHash: reverseHex(headerHashHex), // Convert to big-endian for display
             },
           });
         }
         
-        // Increment extranonce2 every 1000 nonces (or reset nonce range)
-        if (nonceCounter % 1000 === 0) {
+        // Increment extranonce2 when nonce wraps (every 2^32 nonces)
+        if (nonceCounter > 0 && nonceCounter % 0x1000000 === 0) {
           extranonce2Counter++;
         }
       } catch (error) {
-        // Fallback to simple mode on error
-        const hash = doubleSha256(`${currentJob.jobId}|${currentJob.prevhash}|${currentJob.nTime}|${currentJob.nBits}|${nonce}`);
+        console.error('Mining error:', error);
+        // Don't fallback - just skip this hash
         hashesCompleted++;
-        if (hash.startsWith('0000')) {
-          fakeShareCount++;
-        }
       }
     } else {
-      // Demo mode: simple hashing
-      let jobString;
-      if (currentJob) {
-        jobString = `${currentJob.jobId}|${currentJob.prevhash}|${currentJob.nTime}|${currentJob.nBits}|${nonce}`;
-      } else {
-        jobString = `GarciaFamilyBlock|${Date.now()}|${nonce}`;
-      }
-      
-      const hash = doubleSha256(jobString);
+      // Not ready for real mining - skip
       hashesCompleted++;
-      
-      // Toy difficulty check: hash starting with "0000"
-      if (hash.startsWith('0000')) {
-        fakeShareCount++;
-      }
     }
   }
   
