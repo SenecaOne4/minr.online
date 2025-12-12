@@ -359,13 +359,16 @@ export default function MinerPage() {
       setTotalHashes(0);
       setFakeShares(0);
       
-      // Send job data if available (for demo mode)
+      // Use realShareMode toggle to determine mode
+      const useRealMode = realShareMode && currentJob && extraNonce;
+      
+      // Send job data if available
       if (currentJob) {
         workerRef.current.postMessage({
           type: 'job',
           data: {
             ...currentJob,
-            realShareMode: false, // Demo mode
+            realShareMode: useRealMode,
             extraNonce: extraNonce || { extranonce1: '', extranonce2Size: 4 },
             nonceStart: nonceSeedRef.current,
             nonceStride: nonceStride,
@@ -375,14 +378,22 @@ export default function MinerPage() {
       
       workerRef.current.postMessage({ 
         type: 'start', 
-        realShareMode: false, // Demo mode - just hash for display
+        realShareMode: useRealMode,
         nonceStart: nonceSeedRef.current,
         nonceStride: nonceStride,
       });
       
       setWorkerState('running');
       setIsMining(true);
-      addLog('info', 'Worker started (demo mode)');
+      
+      if (useRealMode) {
+        setMiningStartTime(Date.now());
+        setRealShares(0);
+        setLastSubmitResult(null);
+        addLog('info', `Worker started (real share mode, difficulty: ${difficulty || 'unknown'})`);
+      } else {
+        addLog('info', 'Worker started (demo mode - hashrate only)');
+      }
     }
   };
 
