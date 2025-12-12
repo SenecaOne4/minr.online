@@ -267,6 +267,8 @@ export default function MinerPage() {
             const params = parsed.params || [];
             addLog('info', `Received mining.notify with ${params.length} params`);
             if (params.length >= 9) {
+              // Use current difficulty state (may have been set by mining.set_difficulty)
+              const currentDifficulty = difficulty;
               const job: CurrentJob = {
                 jobId: params[0] || '',
                 prevhash: params[1] || '',
@@ -277,11 +279,11 @@ export default function MinerPage() {
                 nBits: params[6] || '',
                 nTime: params[7] || '',
                 cleanJobs: params[8] === true,
-                difficulty: difficulty || undefined,
-                target: difficulty ? computeTarget(difficulty) : undefined,
+                difficulty: currentDifficulty || undefined,
+                target: currentDifficulty ? computeTarget(currentDifficulty) : undefined,
               };
               setCurrentJob(job);
-              addLog('info', `✅ New job received: ${job.jobId} (prevhash: ${job.prevhash.substring(0, 16)}...)`);
+              addLog('info', `✅ New job received: ${job.jobId} (prevhash: ${job.prevhash.substring(0, 16)}..., difficulty: ${currentDifficulty || 'unknown'})`);
               if (job.cleanJobs) {
                 addLog('info', 'Clean jobs flag set - reset worker');
               }
@@ -301,9 +303,11 @@ export default function MinerPage() {
                   ? { ...prev, difficulty: newDifficulty, target }
                   : null
               );
-              addLog('info', `Difficulty set to: ${newDifficulty}`);
-              if (realShareMode && newDifficulty >= 10000) {
+              addLog('info', `Difficulty set to: ${newDifficulty} (target: ${target.substring(0, 16)}...)`);
+              if (realShareMode && newDifficulty >= 1000) {
                 addLog('error', `⚠️ High difficulty (${newDifficulty}) - browsers may not find shares`);
+              } else if (realShareMode && newDifficulty <= 100) {
+                addLog('info', `✅ Low difficulty (${newDifficulty}) - good for browser mining!`);
               }
             }
           }
