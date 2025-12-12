@@ -1,12 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+
+  // Check for auth errors in URL hash on mount
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const error = hashParams.get('error');
+    const errorDescription = hashParams.get('error_description');
+    
+    if (error === 'access_denied' && errorDescription) {
+      // Decode URL-encoded error description
+      const decodedError = decodeURIComponent(errorDescription.replace(/\+/g, ' '));
+      if (decodedError.includes('expired')) {
+        setMessage('The magic link has expired. Please request a new one.');
+      } else {
+        setMessage(`Authentication error: ${decodedError}`);
+      }
+      // Clear the hash
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,10 +64,10 @@ export default function LoginPage() {
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-white mb-3">Minr.online</h1>
             <p className="text-gray-300 text-lg">
-              Bitcoin Mining Platform
+              Join the Minr.online Lottery Pool
             </p>
             <p className="text-gray-400 text-sm mt-2">
-              Sign in to start mining and track your earnings
+              Like a lottery - if someone solves a block, we split the BTC payout. $1 USD entry fee required.
             </p>
           </div>
 
