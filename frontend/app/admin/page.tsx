@@ -52,24 +52,63 @@ export default function AdminPage() {
 
   const loadSettings = async () => {
     try {
-      if (!supabase) return;
+      if (!supabase) {
+        console.error('[admin] Supabase not configured');
+        return;
+      }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('[admin] Session error:', sessionError);
+        return;
+      }
+      
+      if (!session) {
+        console.error('[admin] No session found');
+        return;
+      }
+
+      if (!session.access_token) {
+        console.error('[admin] No access token in session');
+        return;
+      }
 
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/api/admin/settings`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setSettings(data);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[admin] Settings fetch failed:', response.status, errorText);
+        if (response.status === 401) {
+          // Token might be expired, try to refresh
+          const { data: { session: newSession } } = await supabase.auth.refreshSession();
+          if (newSession?.access_token) {
+            // Retry with new token
+            const retryResponse = await fetch(`${apiBaseUrl}/api/admin/settings`, {
+              headers: {
+                Authorization: `Bearer ${newSession.access_token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            if (retryResponse.ok) {
+              const data = await retryResponse.json();
+              setSettings(data);
+            }
+          }
+        }
+        return;
       }
+
+      const data = await response.json();
+      setSettings(data);
     } catch (error) {
-      console.error('Error loading settings:', error);
+      console.error('[admin] Error loading settings:', error);
     }
   };
 
