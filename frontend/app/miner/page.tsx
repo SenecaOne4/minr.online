@@ -407,140 +407,71 @@ export default function MinerPage() {
     return target.toString(16).padStart(64, '0');
   };
 
-  const startWorker = () => {
-    if (workerRef.current && workerState === 'stopped') {
-      setWorkerState('starting');
-      setWorkerError(null);
-      setTotalHashes(0);
-      setFakeShares(0);
-      
-      // Use realShareMode toggle to determine mode
-      const useRealMode = realShareMode && currentJob && extraNonce;
-      
-      // Send job data if available
-      if (currentJob) {
-        workerRef.current.postMessage({
-          type: 'job',
-          data: {
-            ...currentJob,
-            realShareMode: useRealMode,
-            extraNonce: extraNonce || { extranonce1: '', extranonce2Size: 4 },
-            nonceStart: nonceSeedRef.current,
-            nonceStride: nonceStride,
-          },
-        });
-      }
-      
-      workerRef.current.postMessage({ 
-        type: 'start', 
-        realShareMode: useRealMode,
-        nonceStart: nonceSeedRef.current,
-        nonceStride: nonceStride,
-      });
-      
-      setWorkerState('running');
-      setIsMining(true);
-      
-      if (useRealMode) {
-        setMiningStartTime(Date.now());
-        setRealShares(0);
-        setLastSubmitResult(null);
-        addLog('info', `Worker started (real share mode, difficulty: ${difficulty || 'unknown'})`);
-      } else {
-        // Explain why demo mode
-        const reasons = [];
-        if (!realShareMode) reasons.push('Real Share Mode OFF');
-        if (!currentJob) reasons.push('no job received');
-        if (!extraNonce) reasons.push('not subscribed');
-        const reasonText = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
-        addLog('info', `Worker started (demo mode - hashrate only${reasonText})`);
-      }
-    }
-  };
-
-  const stopWorker = () => {
-    if (workerRef.current && (workerState === 'running' || workerState === 'starting')) {
-      workerRef.current.postMessage({ type: 'stop' });
-      setWorkerState('stopped');
-      setIsMining(false);
-      addLog('info', 'Worker stopped');
-    }
-  };
-
-  const startRealShareMining = () => {
-    // Debug logging
-    console.log('startRealShareMining called:', {
-      workerRef: !!workerRef.current,
-      workerState,
-      realShareMode,
-      hasCurrentJob: !!currentJob,
-      hasExtraNonce: !!extraNonce,
-      connectionStatus,
-    });
-
-    if (!workerRef.current) {
-      addLog('error', 'Worker not initialized - please refresh the page');
+  // Unified start mining function - respects Real Share Mode toggle
+  const startMining = () => {
+    if (!workerRef.current || workerState !== 'stopped') {
       return;
     }
 
-    if (workerState !== 'stopped') {
-      addLog('error', `Worker must be stopped first (current state: ${workerState}). Click "Stop Worker" first.`);
-      return;
-    }
-
-    if (!realShareMode) {
-      addLog('error', 'Please enable Real Share Mode checkbox first');
-      return;
-    }
-
-    if (!currentJob) {
-      addLog('error', 'No job received yet - waiting for mining.notify from pool');
-      return;
-    }
-
-    if (!extraNonce) {
-      addLog('error', 'Not subscribed yet - waiting for subscription response');
-      return;
-    }
-
-    if (connectionStatus !== 'connected') {
-      addLog('error', `Not connected to pool (status: ${connectionStatus})`);
+    // Check if real share mode is possible
+    const canUseRealMode = realShareMode && currentJob && extraNonce && connectionStatus === 'connected';
+    
+    if (realShareMode && !canUseRealMode) {
+      // Real Share Mode is ON but conditions aren't met
+      const reasons = [];
+      if (!connectionStatus || connectionStatus !== 'connected') reasons.push('not connected to pool');
+      if (!extraNonce) reasons.push('not subscribed');
+      if (!currentJob) reasons.push('no job received');
+      addLog('error', `Cannot start real share mining: ${reasons.join(', ')}. Connect to pool and wait for a job.`);
       return;
     }
 
     setWorkerState('starting');
+    setWorkerError(null);
     setTotalHashes(0);
     setFakeShares(0);
-    setRealShares(0);
-    setLastSubmitResult(null);
-    setLastSubmitTime(null);
-    setMiningStartTime(Date.now());
     
-    // Calculate nonce stride from session seed
-    const stride = Math.max(1, nonceStride);
-    
-    // Send current job and config
-    workerRef.current.postMessage({
-      type: 'job',
-      data: {
-        ...currentJob,
-        realShareMode: true,
-        extraNonce,
-        nonceStart: nonceSeedRef.current,
-        nonceStride: stride,
-      },
-    });
+    // Send job data if available
+    if (currentJob) {
+      workerRef.current.postMessage({
+        type: 'job',
+        data: {
+          ...currentJob,
+          realShareMode: canUseRealMode,
+          extraNonce: extraNonce || { extranonce1: '', extranonce2Size: 4 },
+          nonceStart: nonceSeedRef.current,
+          nonceStride: nonceStride,
+        },
+      });
+    }
     
     workerRef.current.postMessage({ 
       type: 'start', 
-      realShareMode: true,
+      realShareMode: canUseRealMode,
       nonceStart: nonceSeedRef.current,
-      nonceStride: stride,
+      nonceStride: nonceStride,
     });
     
     setWorkerState('running');
     setIsMining(true);
-    addLog('info', `Real share mining started (difficulty: ${difficulty || 'unknown'}, stride: ${stride})`);
+    
+    if (canUseRealMode) {
+      setMiningStartTime(Date.now());
+      setRealShares(0);
+      setLastSubmitResult(null);
+      addLog('info', `✅ Real share mining started (difficulty: ${difficulty || 'unknown'}, stride: ${nonceStride})`);
+    } else {
+      addLog('info', `Mining started (demo mode - hashrate only)`);
+    }
+  };
+
+  const stopMining = () => {
+    if (workerRef.current && (workerState === 'running' || workerState === 'starting')) {
+      workerRef.current.postMessage({ type: 'stop' });
+      setWorkerState('stopped');
+      setIsMining(false);
+      addLog('info', 'Mining stopped');
+    }
   };
 
   // Submit real share to pool
@@ -630,11 +561,25 @@ export default function MinerPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm text-gray-400">Hashrate</label>
-                    <p className="text-2xl font-bold">{hashesPerSecond.toLocaleString()} H/s</p>
+                    <p className="text-2xl font-bold">
+                      {hashesPerSecond >= 1000000 
+                        ? `${(hashesPerSecond / 1000000).toFixed(2)} MH/s`
+                        : hashesPerSecond >= 1000
+                        ? `${(hashesPerSecond / 1000).toFixed(2)} kH/s`
+                        : `${hashesPerSecond.toLocaleString()} H/s`}
+                    </p>
                   </div>
                   <div>
                     <label className="text-sm text-gray-400">Total Hashes</label>
-                    <p className="text-2xl font-bold">{totalHashes.toLocaleString()}</p>
+                    <p className="text-2xl font-bold">
+                      {totalHashes >= 1000000000
+                        ? `${(totalHashes / 1000000000).toFixed(2)}B`
+                        : totalHashes >= 1000000
+                        ? `${(totalHashes / 1000000).toFixed(2)}M`
+                        : totalHashes >= 1000
+                        ? `${(totalHashes / 1000).toFixed(2)}K`
+                        : totalHashes.toLocaleString()}
+                    </p>
                   </div>
                 </div>
 
@@ -771,64 +716,57 @@ export default function MinerPage() {
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-3">
                     <button
-                      onClick={workerState === 'running' ? stopWorker : startWorker}
+                      onClick={workerState === 'running' ? stopMining : startMining}
                       disabled={workerState === 'error' || workerState === 'starting'}
-                      className={`px-4 py-2 rounded font-semibold ${
+                      className={`px-6 py-3 rounded-lg font-semibold text-lg ${
                         workerState === 'running'
                           ? 'bg-red-600 hover:bg-red-700'
                           : 'bg-green-600 hover:bg-green-700'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      {workerState === 'running' ? 'Stop Worker' : 'Start Worker'}
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        console.log('Button clicked - checking conditions:', {
-                          workerState,
-                          realShareMode,
-                          hasCurrentJob: !!currentJob,
-                          hasExtraNonce: !!extraNonce,
-                          connectionStatus,
-                        });
-                        startRealShareMining();
-                      }}
-                      disabled={workerState !== 'stopped' || !realShareMode || !currentJob || !extraNonce || connectionStatus !== 'connected'}
-                      className="px-4 py-2 rounded font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       title={
-                        workerState !== 'stopped' ? `Stop worker first (current: ${workerState})` :
-                        !realShareMode ? 'Enable Real Share Mode checkbox first' :
-                        !extraNonce ? 'Waiting for subscription response...' :
-                        !currentJob ? 'Waiting for mining.notify job from pool...' :
-                        connectionStatus !== 'connected' ? `Connect to pool first (status: ${connectionStatus})` :
-                        'Start real share mining'
+                        workerState === 'running' ? 'Stop mining' :
+                        realShareMode && (!currentJob || !extraNonce || connectionStatus !== 'connected')
+                          ? 'Real Share Mode requires: Connect to pool and wait for job'
+                          : realShareMode
+                          ? 'Start real share mining (will submit shares to pool)'
+                          : 'Start demo mining (hashrate only, no shares submitted)'
                       }
                     >
-                      Start Real Share Mining
-                      {connectionStatus === 'connected' && extraNonce && !currentJob && (
-                        <span className="ml-2 text-xs">(waiting for job...)</span>
-                      )}
-                      {workerState !== 'stopped' && (
-                        <span className="ml-2 text-xs">(stop worker first)</span>
+                      {workerState === 'running' ? '⏹ Stop Mining' : '▶ Start Mining'}
+                      {workerState === 'stopped' && realShareMode && (
+                        <span className="ml-2 text-xs block mt-1 opacity-75">
+                          {connectionStatus === 'connected' && extraNonce && currentJob
+                            ? '(Real Share Mode)'
+                            : '(Real Share Mode - needs connection)'}
+                        </span>
                       )}
                     </button>
 
                     {connectionStatus === 'disconnected' || connectionStatus === 'error' ? (
                       <button
                         onClick={connectWebSocket}
-                        className="px-4 py-2 rounded font-semibold bg-blue-600 hover:bg-blue-700"
+                        className="px-4 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-700"
                       >
-                        Connect Pool
+                        🔌 Connect Pool
                       </button>
                     ) : (
                       <button
                         onClick={disconnectWebSocket}
-                        className="px-4 py-2 rounded font-semibold bg-red-600 hover:bg-red-700"
+                        className="px-4 py-3 rounded-lg font-semibold bg-red-600 hover:bg-red-700"
                       >
-                        Disconnect Pool
+                        🔌 Disconnect Pool
                       </button>
                     )}
                   </div>
+                  
+                  {realShareMode && workerState === 'stopped' && (
+                    <div className="text-xs text-gray-400 mt-2">
+                      {connectionStatus !== 'connected' && '⚠️ Connect to pool first'}
+                      {connectionStatus === 'connected' && !extraNonce && '⚠️ Waiting for subscription...'}
+                      {connectionStatus === 'connected' && extraNonce && !currentJob && '⚠️ Waiting for job from pool...'}
+                      {connectionStatus === 'connected' && extraNonce && currentJob && '✅ Ready for real share mining'}
+                    </div>
+                  )}
                 </div>
 
                 <div>
