@@ -36,6 +36,7 @@ const BTC_MINING_USERNAME = 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://ws.minr.online/ws/stratum-browser';
 
 export default function MinerPage() {
+  const [mounted, setMounted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [isMining, setIsMining] = useState(false);
   const [realShareMode, setRealShareMode] = useState(false);
@@ -61,6 +62,11 @@ export default function MinerPage() {
   const [workerState, setWorkerState] = useState<WorkerState>('starting');
   const [workerError, setWorkerError] = useState<string | null>(null);
   const logIdRef = useRef(0);
+
+  // Ensure component is mounted before rendering
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Helper to add log entries
   const addLog = (type: LogEntry['type'], message: string) => {
@@ -575,6 +581,15 @@ export default function MinerPage() {
         return 'text-gray-300';
     }
   };
+
+  // Prevent hydration mismatch - don't render until mounted
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white p-4 flex items-center justify-center">
+        <div className="text-xl">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
