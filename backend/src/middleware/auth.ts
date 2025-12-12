@@ -21,6 +21,10 @@ export async function authMiddleware(
 
   const token = authHeader.substring(7);
 
+  if (!supabase) {
+    return res.status(503).json({ error: 'Supabase not configured' });
+  }
+
   try {
     const {
       data: { user },
