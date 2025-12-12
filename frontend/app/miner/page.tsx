@@ -204,7 +204,7 @@ export default function MinerPage() {
         addLog('pool', `← ${data}`);
 
         // Handle multiple JSON messages in one chunk (Stratum can send multiple lines)
-        const lines = data.trim().split('\n').filter(line => line.trim());
+        const lines = data.trim().split('\n').filter((line: string) => line.trim());
         
         for (const line of lines) {
           // Try to parse as JSON
