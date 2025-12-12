@@ -36,7 +36,6 @@ const BTC_MINING_USERNAME = 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://ws.minr.online/ws/stratum-browser';
 
 export default function MinerPage() {
-  const [mounted, setMounted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [isMining, setIsMining] = useState(false);
   const [realShareMode, setRealShareMode] = useState(false);
@@ -62,11 +61,6 @@ export default function MinerPage() {
   const [workerState, setWorkerState] = useState<WorkerState>('starting');
   const [workerError, setWorkerError] = useState<string | null>(null);
   const logIdRef = useRef(0);
-
-  // Ensure component is mounted before rendering
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Helper to add log entries
   const addLog = (type: LogEntry['type'], message: string) => {
@@ -451,36 +445,43 @@ export default function MinerPage() {
   };
 
   const startRealShareMining = () => {
+    // Debug logging
+    console.log('startRealShareMining called:', {
+      workerRef: !!workerRef.current,
+      workerState,
+      realShareMode,
+      hasCurrentJob: !!currentJob,
+      hasExtraNonce: !!extraNonce,
+      connectionStatus,
+    });
+
     if (!workerRef.current) {
-      addLog('error', 'Worker not initialized');
+      addLog('error', 'Worker not initialized - please refresh the page');
       return;
     }
 
-    // If worker is running, stop it first
-    if (workerState === 'running' || workerState === 'starting') {
-      addLog('info', 'Stopping worker before starting real share mining...');
-      workerRef.current.postMessage({ type: 'stop' });
-      setWorkerState('stopped');
-      setIsMining(false);
-      // Wait a moment for worker to stop, then start real share mining
-      setTimeout(() => {
-        startRealShareMining();
-      }, 100);
+    if (workerState !== 'stopped') {
+      addLog('error', `Worker must be stopped first (current state: ${workerState}). Click "Stop Worker" first.`);
       return;
     }
 
     if (!realShareMode) {
-      addLog('error', 'Please enable Real Share Mode to start mining');
+      addLog('error', 'Please enable Real Share Mode checkbox first');
       return;
     }
 
-    if (!currentJob || !extraNonce) {
-      addLog('error', 'Cannot start mining - not connected to pool or no job received');
+    if (!currentJob) {
+      addLog('error', 'No job received yet - waiting for mining.notify from pool');
+      return;
+    }
+
+    if (!extraNonce) {
+      addLog('error', 'Not subscribed yet - waiting for subscription response');
       return;
     }
 
     if (connectionStatus !== 'connected') {
-      addLog('error', 'Cannot start mining - not connected to pool');
+      addLog('error', `Not connected to pool (status: ${connectionStatus})`);
       return;
     }
 
@@ -582,17 +583,8 @@ export default function MinerPage() {
     }
   };
 
-  // Prevent hydration mismatch - don't render until mounted
-  if (!mounted) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white p-4 flex items-center justify-center" style={{ backgroundColor: '#111827' }}>
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4" style={{ backgroundColor: '#111827', minHeight: '100vh' }}>
+    <div className="min-h-screen bg-gray-900 text-white p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -768,22 +760,33 @@ export default function MinerPage() {
                     </button>
 
                     <button
-                      onClick={startRealShareMining}
-                      disabled={!realShareMode || !currentJob || !extraNonce || connectionStatus !== 'connected' || workerState === 'error'}
+                      onClick={() => {
+                        console.log('Button clicked - checking conditions:', {
+                          workerState,
+                          realShareMode,
+                          hasCurrentJob: !!currentJob,
+                          hasExtraNonce: !!extraNonce,
+                          connectionStatus,
+                        });
+                        startRealShareMining();
+                      }}
+                      disabled={workerState !== 'stopped' || !realShareMode || !currentJob || !extraNonce || connectionStatus !== 'connected'}
                       className="px-4 py-2 rounded font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       title={
-                        !realShareMode ? 'Enable Real Share Mode first' :
+                        workerState !== 'stopped' ? `Stop worker first (current: ${workerState})` :
+                        !realShareMode ? 'Enable Real Share Mode checkbox first' :
                         !extraNonce ? 'Waiting for subscription response...' :
                         !currentJob ? 'Waiting for mining.notify job from pool...' :
-                        connectionStatus !== 'connected' ? 'Connect to pool first' :
-                        workerState === 'error' ? 'Worker has an error - refresh page' :
-                        workerState === 'running' ? 'Will stop worker and start real share mining' :
+                        connectionStatus !== 'connected' ? `Connect to pool first (status: ${connectionStatus})` :
                         'Start real share mining'
                       }
                     >
-                      {workerState === 'running' ? 'Switch to Real Share Mining' : 'Start Real Share Mining'}
+                      Start Real Share Mining
                       {connectionStatus === 'connected' && extraNonce && !currentJob && (
                         <span className="ml-2 text-xs">(waiting for job...)</span>
+                      )}
+                      {workerState !== 'stopped' && (
+                        <span className="ml-2 text-xs">(stop worker first)</span>
                       )}
                     </button>
 
