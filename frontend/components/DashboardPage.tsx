@@ -29,7 +29,11 @@ export default function DashboardPage({ user }: { user: any }) {
 
   const loadData = async () => {
     try {
-      // Get auth token
+      // Get auth token (only if Supabase is configured)
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
@@ -69,6 +73,7 @@ export default function DashboardPage({ user }: { user: any }) {
 
   const handleSaveProfile = async () => {
     try {
+      if (!supabase) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
@@ -97,7 +102,9 @@ export default function DashboardPage({ user }: { user: any }) {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
   };
 
   const handleStartMining = () => {

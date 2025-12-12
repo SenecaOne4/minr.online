@@ -52,6 +52,8 @@ pnpm install
 pnpm dev
 ```
 
+**Main miner UI:** `/miner`
+
 ### Supabase Schema
 
 Deploy the schema from `supabase/schema.sql` via Supabase CLI or dashboard.
