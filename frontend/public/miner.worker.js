@@ -256,10 +256,9 @@ function mineBatch() {
     
     try {
       // Check if we need to recompute merkle root (extranonce2 changed)
-      const extranonce2Hex = extranonce2Counter.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
-      
       if (cachedExtranonce2 !== extranonce2Counter) {
         // Recompute coinbase and merkle root for this extranonce2
+        const extranonce2Hex = extranonce2Counter.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
         const coinbaseHex = currentJob.coinb1 + extraNonce.extranonce1 + extranonce2Hex + currentJob.coinb2;
         const coinbaseBytes = hexToBytes(coinbaseHex);
         const coinbaseHashBytes = sha256(sha256(coinbaseBytes));
@@ -294,6 +293,7 @@ function mineBatch() {
             headerHash: reverseHex(headerHashHex),
           },
         });
+        // Don't break - continue mining for more shares
       }
       
       // Increment extranonce2 periodically (every 100k nonces)
