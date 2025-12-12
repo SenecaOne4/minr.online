@@ -203,9 +203,13 @@ export default function MinerPage() {
         const data = event.data;
         addLog('pool', `← ${data}`);
 
-        // Try to parse as JSON
-        try {
-          const parsed = JSON.parse(data);
+        // Handle multiple JSON messages in one chunk (Stratum can send multiple lines)
+        const lines = data.trim().split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          // Try to parse as JSON
+          try {
+            const parsed = JSON.parse(line);
 
           // Handle mining.subscribe response
           if (parsed.id === 1 && parsed.result) {
@@ -309,8 +313,10 @@ export default function MinerPage() {
           if ((parsed.result || parsed.error) && !parsed.id) {
             addLog('pool', `Response: ${JSON.stringify(parsed)}`);
           }
-        } catch (parseError) {
-          // Not JSON or parse failed - already logged as raw text
+          } catch (parseError) {
+            // Not JSON or parse failed - skip this line, already logged as raw text
+            console.warn('Failed to parse JSON line:', line);
+          }
         }
       };
 
@@ -706,8 +712,19 @@ export default function MinerPage() {
                       onClick={startRealShareMining}
                       disabled={workerState !== 'stopped' || !realShareMode || !currentJob || !extraNonce || connectionStatus !== 'connected'}
                       className="px-4 py-2 rounded font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={
+                        !realShareMode ? 'Enable Real Share Mode first' :
+                        !extraNonce ? 'Waiting for subscription response...' :
+                        !currentJob ? 'Waiting for mining.notify job from pool...' :
+                        connectionStatus !== 'connected' ? 'Connect to pool first' :
+                        workerState !== 'stopped' ? 'Stop worker first' :
+                        'Start real share mining'
+                      }
                     >
                       Start Real Share Mining
+                      {connectionStatus === 'connected' && extraNonce && !currentJob && (
+                        <span className="ml-2 text-xs">(waiting for job...)</span>
+                      )}
                     </button>
 
                     {connectionStatus === 'disconnected' || connectionStatus === 'error' ? (
