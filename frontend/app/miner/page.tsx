@@ -392,7 +392,13 @@ export default function MinerPage() {
         setLastSubmitResult(null);
         addLog('info', `Worker started (real share mode, difficulty: ${difficulty || 'unknown'})`);
       } else {
-        addLog('info', 'Worker started (demo mode - hashrate only)');
+        // Explain why demo mode
+        const reasons = [];
+        if (!realShareMode) reasons.push('Real Share Mode OFF');
+        if (!currentJob) reasons.push('no job received');
+        if (!extraNonce) reasons.push('not subscribed');
+        const reasonText = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
+        addLog('info', `Worker started (demo mode - hashrate only${reasonText})`);
       }
     }
   };
