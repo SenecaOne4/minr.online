@@ -121,7 +121,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <Navbar userEmail={user.email} />
+      <Navbar userEmail={user.email} isAdmin={isAdmin} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Admin Settings</h1>
