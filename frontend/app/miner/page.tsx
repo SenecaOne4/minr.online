@@ -38,6 +38,8 @@ const BTC_MINING_USERNAME = 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://ws.minr.online/ws/stratum-browser';
 
 export default function MinerPage() {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [isMining, setIsMining] = useState(false);
   const [desiredDifficulty, setDesiredDifficulty] = useState(16);
@@ -516,19 +518,54 @@ export default function MinerPage() {
     }
   };
 
-  const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
-
+  // Check authentication
   useEffect(() => {
     if (supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
-        setUserEmail(session?.user?.email);
+        if (session?.user) {
+          setUser(session.user);
+          setLoading(false);
+        } else {
+          setLoading(false);
+        }
       });
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+      });
+
+      return () => subscription.unsubscribe();
+    } else {
+      setLoading(false);
     }
   }, []);
 
+  // Show loading or redirect if not authenticated
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <div className="text-xl text-white">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    // Redirect to home/login
+    if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <div className="text-xl text-white">Redirecting to login...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      <Navbar userEmail={userEmail} />
+      <Navbar userEmail={user?.email} />
       <div className="max-w-7xl mx-auto p-4">
         {/* Header */}
         <div className="mb-8">
@@ -539,7 +576,7 @@ export default function MinerPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Card */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl p-6 shadow-2xl">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
               <h2 className="text-2xl font-semibold mb-4 text-white">Mining Dashboard</h2>
 
               <div className="space-y-4">
@@ -640,7 +677,7 @@ export default function MinerPage() {
                               addLog('client', `→ Suggest difficulty: ${val}`);
                             }
                           }}
-                          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm text-sm"
+                          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500/50 backdrop-blur-sm text-sm transition-all duration-200"
                         />
                         <p className="text-xs text-gray-500 mt-1">Default: 16</p>
                       </div>
@@ -666,7 +703,7 @@ export default function MinerPage() {
                               });
                             }
                           }}
-                          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm text-sm"
+                          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500/50 backdrop-blur-sm text-sm transition-all duration-200"
                         />
                         <p className="text-xs text-gray-500 mt-1">Prevents overlap</p>
                       </div>
@@ -679,11 +716,11 @@ export default function MinerPage() {
                     <button
                       onClick={workerState === 'running' ? stopMining : startMining}
                       disabled={workerState === 'error' || workerState === 'starting'}
-                      className={`px-6 py-3 rounded-lg font-semibold text-lg transition-colors shadow-lg ${
+                      className={`px-6 py-3 rounded-xl font-semibold text-lg transition-all duration-200 shadow-xl hover:shadow-2xl ${
                         workerState === 'running'
-                          ? 'bg-red-600 hover:bg-red-700'
-                          : 'bg-green-600 hover:bg-green-700'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white'
+                          : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white'
+                      } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg`}
                       title={
                         workerState === 'running' ? 'Stop mining' :
                         (!currentJob || !extraNonce || connectionStatus !== 'connected')
@@ -704,14 +741,14 @@ export default function MinerPage() {
                     {connectionStatus === 'disconnected' || connectionStatus === 'error' ? (
                       <button
                         onClick={connectWebSocket}
-                        className="px-4 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-700 transition-colors shadow-lg"
+                        className="px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white transition-all duration-200 shadow-xl hover:shadow-2xl"
                       >
                         🔌 Connect Pool
                       </button>
                     ) : (
                       <button
                         onClick={disconnectWebSocket}
-                        className="px-4 py-3 rounded-lg font-semibold bg-red-600 hover:bg-red-700 transition-colors shadow-lg"
+                        className="px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white transition-all duration-200 shadow-xl hover:shadow-2xl"
                       >
                         🔌 Disconnect Pool
                       </button>
@@ -739,7 +776,7 @@ export default function MinerPage() {
 
             {/* ExtraNonce Panel */}
             {extraNonce && (
-              <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl p-6 shadow-2xl">
+              <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
                 <h2 className="text-2xl font-semibold mb-4 text-white">ExtraNonce</h2>
                 <div className="space-y-3 font-mono text-sm">
                   <div>
@@ -756,7 +793,7 @@ export default function MinerPage() {
 
             {/* Current Job Panel */}
             {currentJob && (
-              <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl p-6 shadow-2xl">
+              <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
                 <h2 className="text-2xl font-semibold mb-4 text-white">Current Job</h2>
                 <div className="space-y-3 font-mono text-sm">
                   <div>

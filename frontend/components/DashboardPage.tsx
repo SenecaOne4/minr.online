@@ -149,7 +149,7 @@ export default function DashboardPage({ user }: { user: any }) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Profile Card */}
-          <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl p-6 shadow-xl">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
             <h2 className="text-2xl font-bold mb-4 text-white">Profile</h2>
             {editing ? (
               <div className="space-y-4">
@@ -161,7 +161,7 @@ export default function DashboardPage({ user }: { user: any }) {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500/50 backdrop-blur-sm transition-all duration-200"
                     placeholder="Choose a username"
                   />
                 </div>
@@ -180,7 +180,7 @@ export default function DashboardPage({ user }: { user: any }) {
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveProfile}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
                   >
                     Save
                   </button>
@@ -190,7 +190,7 @@ export default function DashboardPage({ user }: { user: any }) {
                       setUsername(profile?.username || '');
                       setBtcAddress(profile?.btc_payout_address || '');
                     }}
-                    className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-colors border border-white/20"
+                    className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl transition-all duration-200 border border-white/20 shadow-md hover:shadow-lg"
                   >
                     Cancel
                   </button>
@@ -230,7 +230,7 @@ export default function DashboardPage({ user }: { user: any }) {
           </div>
 
           {/* Membership Card */}
-          <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl p-6 shadow-xl">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
             <h2 className="text-2xl font-bold mb-4 text-white">Membership</h2>
             {membership ? (
               <div className="space-y-2">
@@ -265,7 +265,7 @@ export default function DashboardPage({ user }: { user: any }) {
           </p>
           <Link
             href="/miner"
-            className="inline-block bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg"
+            className="inline-block bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
           >
             Launch Miner →
           </Link>
