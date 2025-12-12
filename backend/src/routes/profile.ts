@@ -2,11 +2,15 @@ import { Router, Response } from 'express';
 import { supabase } from '../supabaseClient';
 import { AuthenticatedRequest, authMiddleware } from '../middleware/auth';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /api/profile
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
     const userId = req.user!.id;
 
     const { data, error } = await supabase
@@ -28,6 +32,10 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
 // POST /api/profile
 router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
     const userId = req.user!.id;
     const { username, btc_payout_address } = req.body;
 
