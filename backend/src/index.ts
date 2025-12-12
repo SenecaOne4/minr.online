@@ -15,6 +15,15 @@ app.get('/health', (req, res) => {
   res.json({ ok: true });
 });
 
+// Version endpoint - returns git commit hash
+app.get('/api/version', (req, res) => {
+  const commitHash = process.env.GIT_COMMIT_HASH || process.env.VERCEL_GIT_COMMIT_SHA || 'unknown';
+  res.json({ 
+    commit: commitHash,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // API routes
 app.use('/api/profile', profileRoutes);
 app.use('/api/membership', membershipRoutes);
