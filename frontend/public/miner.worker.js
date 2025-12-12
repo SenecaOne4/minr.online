@@ -214,7 +214,8 @@ let currentJob = null;
 let realShareMode = false;
 let extraNonce = null;
 let extranonce2Counter = 0;
-let startNonce = 0;
+let nonceStart = 0;
+let nonceStride = 1;
 let nonceCounter = 0;
 let hashesCompleted = 0;
 let fakeShareCount = 0;
@@ -230,7 +231,9 @@ function mineBatch() {
   let batchHashes = 0;
   
   for (let i = 0; i < batchSize; i++) {
-    const nonce = startNonce + nonceCounter++;
+    // Use stride: nonce = start + (counter * stride) mod 2^32
+    const nonce = (nonceStart + (nonceCounter * nonceStride)) & 0xffffffff;
+    nonceCounter++;
     
     if (realShareMode && currentJob.coinb1 && currentJob.coinb2 && extraNonce && currentJob.target) {
       // Real share mode: assemble proper block header
@@ -279,8 +282,9 @@ function mineBatch() {
           });
         }
         
-        // Increment extranonce2 when nonce wraps (every 2^32 nonces)
-        if (nonceCounter > 0 && nonceCounter % 0x1000000 === 0) {
+        // Increment extranonce2 periodically to explore more coinbase variations
+        // When nonce counter reaches a threshold, increment extranonce2
+        if (nonceCounter > 0 && nonceCounter % 100000 === 0) {
           extranonce2Counter++;
         }
       } catch (error) {
@@ -330,7 +334,17 @@ self.onmessage = function(e) {
         hashesCompleted = 0;
         fakeShareCount = 0;
         lastReportTime = performance.now();
-        startNonce = Math.floor(Math.random() * 0xffffffff);
+        // Use provided nonceStart and nonceStride, or generate random
+        if (e.data.nonceStart !== undefined) {
+          nonceStart = e.data.nonceStart;
+        } else {
+          nonceStart = Math.floor(Math.random() * 0xffffffff);
+        }
+        if (e.data.nonceStride !== undefined) {
+          nonceStride = Math.max(1, e.data.nonceStride);
+        } else {
+          nonceStride = 1;
+        }
         nonceCounter = 0;
         extranonce2Counter = Math.floor(Math.random() * 0xffff);
         mineBatch();
@@ -353,6 +367,12 @@ self.onmessage = function(e) {
       }
       if (data.extraNonce) {
         extraNonce = data.extraNonce;
+      }
+      if (data.nonceStart !== undefined) {
+        nonceStart = data.nonceStart;
+      }
+      if (data.nonceStride !== undefined) {
+        nonceStride = Math.max(1, data.nonceStride);
       }
       // Reset nonce counter when job changes
       nonceCounter = 0;

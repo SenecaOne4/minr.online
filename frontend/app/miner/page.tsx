@@ -38,17 +38,22 @@ export default function MinerPage() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [isMining, setIsMining] = useState(false);
   const [realShareMode, setRealShareMode] = useState(false);
+  const [desiredDifficulty, setDesiredDifficulty] = useState(16);
+  const [nonceStride, setNonceStride] = useState(1);
   const [hashesPerSecond, setHashesPerSecond] = useState(0);
   const [totalHashes, setTotalHashes] = useState(0);
   const [fakeShares, setFakeShares] = useState(0);
   const [realShares, setRealShares] = useState(0);
   const [lastSubmitResult, setLastSubmitResult] = useState<string | null>(null);
+  const [lastSubmitTime, setLastSubmitTime] = useState<number | null>(null);
+  const [miningStartTime, setMiningStartTime] = useState<number | null>(null);
   const [currentJob, setCurrentJob] = useState<CurrentJob | null>(null);
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [extraNonce, setExtraNonce] = useState<ExtraNonce | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const submitIdRef = useRef(3);
   const sessionIdRef = useRef(`browser-${Date.now()}`);
+  const nonceSeedRef = useRef(Math.floor(Math.random() * 0xffffffff));
 
   const wsRef = useRef<WebSocket | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -125,10 +130,26 @@ export default function MinerPage() {
           ...currentJob,
           realShareMode,
           extraNonce,
+          nonceStart: nonceSeedRef.current,
+          nonceStride: nonceStride,
         },
       });
     }
-  }, [currentJob, realShareMode, extraNonce]);
+  }, [currentJob, realShareMode, extraNonce, nonceStride]);
+
+  // Check for high difficulty warning (no submits after 60 seconds)
+  useEffect(() => {
+    if (!isMining || !miningStartTime || realShares > 0) return;
+
+    const checkInterval = setInterval(() => {
+      const elapsed = (Date.now() - miningStartTime) / 1000;
+      if (elapsed >= 60 && difficulty && difficulty >= 1000) {
+        addLog('error', '⚠️ No shares found after 60s. Pool difficulty may be too high for browsers.');
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(checkInterval);
+  }, [isMining, miningStartTime, realShares, difficulty]);
 
   const connectWebSocket = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -185,6 +206,24 @@ export default function MinerPage() {
               };
               ws.send(JSON.stringify(authorizeMsg));
               addLog('client', `→ ${JSON.stringify(authorizeMsg)}`);
+              
+              // Send mining.suggest_difficulty (some pools support it)
+              const suggestDiffMsg = {
+                id: 100,
+                method: 'mining.suggest_difficulty',
+                params: [desiredDifficulty],
+              };
+              ws.send(JSON.stringify(suggestDiffMsg));
+              addLog('client', `→ Suggest difficulty: ${desiredDifficulty}`);
+            }
+          }
+
+          // Handle mining.suggest_difficulty response
+          if (parsed.id === 100) {
+            if (parsed.result === true) {
+              addLog('info', `✅ Pool accepted suggested difficulty: ${desiredDifficulty}`);
+            } else {
+              addLog('info', `ℹ️ Pool does not support suggest_difficulty or rejected. Using assigned difficulty.`);
             }
           }
 
@@ -237,6 +276,7 @@ export default function MinerPage() {
               addLog('pool', `✅ Share accepted! (ID: ${parsed.id})`);
               setRealShares((prev) => prev + 1);
               setLastSubmitResult('✅ Accepted');
+              setLastSubmitTime(Date.now());
             } else {
               const errorMsg = parsed.error || 'Unknown error';
               addLog('error', `❌ Share rejected: ${errorMsg} (ID: ${parsed.id})`);
@@ -310,6 +350,11 @@ export default function MinerPage() {
       setFakeShares(0);
       setRealShares(0);
       setLastSubmitResult(null);
+      setLastSubmitTime(null);
+      setMiningStartTime(Date.now());
+      
+      // Calculate nonce stride from session seed
+      const stride = Math.max(1, nonceStride);
       
       // Send current job and config
       workerRef.current.postMessage({
@@ -318,11 +363,18 @@ export default function MinerPage() {
           ...currentJob,
           realShareMode: true,
           extraNonce,
+          nonceStart: nonceSeedRef.current,
+          nonceStride: stride,
         },
       });
       
-      workerRef.current.postMessage({ type: 'start', realShareMode: true });
-      addLog('info', `Real share mining started (difficulty: ${difficulty || 'unknown'})`);
+      workerRef.current.postMessage({ 
+        type: 'start', 
+        realShareMode: true,
+        nonceStart: nonceSeedRef.current,
+        nonceStride: stride,
+      });
+      addLog('info', `Real share mining started (difficulty: ${difficulty || 'unknown'}, stride: ${stride})`);
     }
   };
 
@@ -436,13 +488,18 @@ export default function MinerPage() {
                   </p>
                 </div>
 
-                {realShareMode && difficulty && difficulty >= 10000 && (
+                {realShareMode && difficulty && difficulty >= 1000 && (
                   <div className="bg-red-900/30 border border-red-600 rounded p-3">
                     <p className="text-red-400 font-semibold">
-                      ⚠️ Real Share Mode Active
+                      ⚠️ High Difficulty Warning
                     </p>
                     <p className="text-xs text-red-300 mt-1">
-                      At difficulty {difficulty}, browsers may not find shares. This is real mode.
+                      Current difficulty: {difficulty}. Browsers may not find shares at this difficulty.
+                      {miningStartTime && realShares === 0 && (Date.now() - miningStartTime) / 1000 >= 60 && (
+                        <span className="block mt-1 font-semibold">
+                          No shares after 60s. Use a pool with lower difficulty or run our own stratum coordinator.
+                        </span>
+                      )}
                     </p>
                   </div>
                 )}
@@ -471,21 +528,79 @@ export default function MinerPage() {
                   </div>
                 )}
 
-                <div className="flex items-center gap-3 mb-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={realShareMode}
-                      onChange={(e) => {
-                        setRealShareMode(e.target.checked);
-                        if (e.target.checked && difficulty && difficulty >= 10000) {
-                          addLog('error', `⚠️ Real Share Mode enabled at difficulty ${difficulty}`);
-                        }
-                      }}
-                      className="w-4 h-4"
-                    />
-                    <span className="text-sm">Real Share Mode</span>
-                  </label>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={realShareMode}
+                        onChange={(e) => {
+                          setRealShareMode(e.target.checked);
+                          if (e.target.checked && difficulty && difficulty >= 1000) {
+                            addLog('error', `⚠️ Real Share Mode enabled at difficulty ${difficulty}`);
+                          }
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">Real Share Mode</span>
+                    </label>
+                  </div>
+
+                  {connectionStatus === 'connected' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm text-gray-400">Desired Difficulty</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000"
+                          value={desiredDifficulty}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 16;
+                            setDesiredDifficulty(val);
+                            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                              const suggestDiffMsg = {
+                                id: 100,
+                                method: 'mining.suggest_difficulty',
+                                params: [val],
+                              };
+                              wsRef.current.send(JSON.stringify(suggestDiffMsg));
+                              addLog('client', `→ Suggest difficulty: ${val}`);
+                            }
+                          }}
+                          className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Default: 16</p>
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-400">Nonce Stride</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000"
+                          value={nonceStride}
+                          onChange={(e) => {
+                            const val = Math.max(1, parseInt(e.target.value) || 1);
+                            setNonceStride(val);
+                            if (workerRef.current && currentJob) {
+                              workerRef.current.postMessage({
+                                type: 'job',
+                                data: {
+                                  ...currentJob,
+                                  realShareMode,
+                                  extraNonce,
+                                  nonceStart: nonceSeedRef.current,
+                                  nonceStride: val,
+                                },
+                              });
+                            }
+                          }}
+                          className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Prevents overlap</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
