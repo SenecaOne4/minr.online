@@ -12,9 +12,8 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     }
 
     const userId = req.user!.id;
-    const client = supabase; // TypeScript guard
 
-    const { data, error } = await client
+    const { data, error } = await supabase!
       .from('memberships')
       .select('*')
       .eq('user_id', userId)

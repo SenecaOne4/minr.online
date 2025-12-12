@@ -12,9 +12,8 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     }
 
     const userId = req.user!.id;
-    const client = supabase; // TypeScript guard
 
-    const { data, error } = await client
+    const { data, error } = await supabase!
       .from('profiles')
       .select('*')
       .eq('id', userId)
@@ -39,9 +38,8 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
 
     const userId = req.user!.id;
     const { username, btc_payout_address } = req.body;
-    const client = supabase; // TypeScript guard
 
-    const { data, error } = await client
+    const { data, error } = await supabase!
       .from('profiles')
       .upsert(
         {
