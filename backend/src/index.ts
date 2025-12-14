@@ -108,6 +108,10 @@ app.use('/api/membership', membershipRoutes);
 import publicSettingsRoutes from './routes/publicSettings';
 app.use('/api/admin/settings/public', publicSettingsRoutes);
 
+// Miner config route (requires auth)
+import minerConfigRoutes from './routes/miner-config';
+app.use('/api/miner-config', minerConfigRoutes);
+
 // Optional routes
 if (paymentRoutes) {
   app.use('/api/payments', paymentRoutes);

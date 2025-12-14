@@ -135,70 +135,106 @@ export default function MinersPage() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white">Desktop Miner</h2>
-                <p className="text-gray-400 text-sm">Download a standalone HTML file that runs in your browser</p>
+                <p className="text-gray-400 text-sm">Choose your preferred miner type</p>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <p className="text-gray-300">
-                Download a personalized HTML file that contains everything needed to mine. Just open it in your browser and click "Start Mining". 
-                It's pre-configured with your BTC wallet address and connects automatically to our mining pool.
-              </p>
-              
-              <a
-                href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/standalone-miner`}
-                download="minr-desktop-miner.html"
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
-                onClick={async (e) => {
-                  // Fetch with auth token
-                  if (!user) return;
-                  const { data: { session } } = await supabase!.auth.getSession();
-                  if (!session) {
-                    e.preventDefault();
-                    alert('Please log in to download the miner');
-                    return;
-                  }
-                  
-                  e.preventDefault();
-                  try {
-                    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-                    const response = await fetch(`${apiBaseUrl}/api/standalone-miner`, {
-                      headers: {
-                        Authorization: `Bearer ${session.access_token}`,
-                      },
-                    });
-                    
-                    if (!response.ok) {
-                      const error = await response.json();
-                      alert(`Error: ${error.error || 'Failed to download miner'}`);
+            <div className="space-y-6">
+              {/* HTML Miner Option */}
+              <div className="p-4 bg-gray-800/30 rounded-lg border border-white/10">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-1">Browser Miner (HTML)</h3>
+                    <p className="text-sm text-gray-400">Easy to use, no installation required</p>
+                  </div>
+                  <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">Easy</span>
+                </div>
+                <p className="text-sm text-gray-300 mb-3">
+                  Download a standalone HTML file that runs in your browser. Perfect for quick testing or low-resource mining.
+                </p>
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/standalone-miner`}
+                  download="minr-desktop-miner.html"
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
+                  onClick={async (e) => {
+                    if (!user) return;
+                    const { data: { session } } = await supabase!.auth.getSession();
+                    if (!session) {
+                      e.preventDefault();
+                      alert('Please log in to download the miner');
                       return;
                     }
                     
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `minr-desktop-miner-${Date.now()}.html`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                  } catch (error: any) {
-                    alert(`Error downloading miner: ${error.message}`);
-                  }
-                }}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Download Desktop Miner
-              </a>
-              
-              <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
-                <p className="text-sm text-gray-400">
-                  <strong className="text-white">How it works:</strong> The downloaded HTML file contains all the mining code embedded. 
-                  Simply open it in any modern web browser (Chrome, Firefox, Edge, Safari) and click "Start Mining". 
-                  No installation or setup required - it connects directly to our mining pool using your configured wallet address.
+                    e.preventDefault();
+                    try {
+                      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+                      const response = await fetch(`${apiBaseUrl}/api/standalone-miner`, {
+                        headers: { Authorization: `Bearer ${session.access_token}` },
+                      });
+                      
+                      if (!response.ok) {
+                        const error = await response.json();
+                        alert(`Error: ${error.error || 'Failed to download miner'}`);
+                        return;
+                      }
+                      
+                      const blob = await response.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `minr-desktop-miner-${Date.now()}.html`;
+                      document.body.appendChild(a);
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                      document.body.removeChild(a);
+                    } catch (error: any) {
+                      alert(`Error downloading miner: ${error.message}`);
+                    }
+                  }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download HTML Miner
+                </a>
+              </div>
+
+              {/* CPU Miner Option */}
+              <div className="p-4 bg-gray-800/30 rounded-lg border border-white/10">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-1">CPU Miner (cpuminer)</h3>
+                    <p className="text-sm text-gray-400">High performance, native C code</p>
+                  </div>
+                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">Fast</span>
+                </div>
+                <p className="text-sm text-gray-300 mb-3">
+                  Modified cpuminer that auto-configures from minr.online. 10-100x faster than browser mining. 
+                  <strong className="text-white"> Coming soon:</strong> Pre-built binaries and auto-configuration.
+                </p>
+                <div className="flex gap-2">
+                  <a
+                    href="https://github.com/pooler/cpuminer"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    View on GitHub
+                  </a>
+                  <div className="text-xs text-gray-400 flex items-center px-4 py-2">
+                    Modified version coming soon
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                <p className="text-xs text-blue-200">
+                  <strong className="text-white">Note:</strong> All miners auto-configure from minr.online. 
+                  Endpoints and settings are managed on our site - no manual configuration needed. 
+                  The modified cpuminer will fetch your personalized config automatically.
                 </p>
               </div>
             </div>
