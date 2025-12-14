@@ -40,11 +40,15 @@ router.post('/request', authMiddleware, async (req: AuthenticatedRequest, res: R
     // Check if user already paid or is exempt
     const { data: profile } = await supabase!
       .from('profiles')
-      .select('has_paid_entry_fee, exempt_from_entry_fee')
+      .select('has_paid_entry_fee, exempt_from_entry_fee, is_admin')
       .eq('id', userId)
       .single();
 
-    if (profile?.has_paid_entry_fee || profile?.exempt_from_entry_fee) {
+    // Admins are automatically exempt
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'senecaone4@gmail.com';
+    const isAdmin = req.user?.email === ADMIN_EMAIL || profile?.is_admin === true;
+
+    if (profile?.has_paid_entry_fee || profile?.exempt_from_entry_fee || isAdmin) {
       return res.status(400).json({ error: 'Entry fee already paid or user is exempt' });
     }
 

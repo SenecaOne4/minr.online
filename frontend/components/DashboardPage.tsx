@@ -32,7 +32,7 @@ export default function DashboardPage({ user }: { user: any }) {
   const [hasPaidEntryFee, setHasPaidEntryFee] = useState(false);
   
   // Check if user is admin (compare email to admin email)
-  const isAdmin = user?.email === 'senecaone4@gmail.com';
+  const isAdmin = user?.email === 'senecaone4@gmail.com' || profile?.is_admin === true;
 
   useEffect(() => {
     loadData();
@@ -63,7 +63,9 @@ export default function DashboardPage({ user }: { user: any }) {
         setProfile(profileData);
         setUsername(profileData.username || '');
         setBtcAddress(profileData.btc_payout_address || '');
-        setHasPaidEntryFee(profileData.has_paid_entry_fee || profileData.exempt_from_entry_fee || false);
+        // Admins are automatically exempt from entry fee
+        const isAdminUser = user?.email === 'senecaone4@gmail.com' || profileData.is_admin === true;
+        setHasPaidEntryFee(profileData.has_paid_entry_fee || profileData.exempt_from_entry_fee || isAdminUser);
       }
 
       // Fetch membership
@@ -156,8 +158,8 @@ export default function DashboardPage({ user }: { user: any }) {
           <p className="text-gray-400">Join the Minr.online Lottery Pool • Manage your profile and start mining</p>
         </div>
 
-        {/* Payment Gate */}
-        {!hasPaidEntryFee && !profile?.exempt_from_entry_fee && (
+        {/* Payment Gate - Don't show for admins */}
+        {!hasPaidEntryFee && !profile?.exempt_from_entry_fee && !isAdmin && (
           <div className="mb-6">
             <PaymentGate />
           </div>
@@ -274,7 +276,7 @@ export default function DashboardPage({ user }: { user: any }) {
         </div>
 
         {/* Analytics Section */}
-        {(hasPaidEntryFee || profile?.exempt_from_entry_fee) && (
+        {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) && (
           <div className="mb-6">
             <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-green-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
               <h2 className="text-2xl font-bold mb-4 text-white">Mining Analytics</h2>
@@ -290,7 +292,7 @@ export default function DashboardPage({ user }: { user: any }) {
             Join the lottery pool! If someone solves a block, we split the BTC payout. Use our browser-based miner or download the desktop miner.
           </p>
           <div className="flex flex-wrap gap-4">
-            {(hasPaidEntryFee || profile?.exempt_from_entry_fee) ? (
+            {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) ? (
               <>
                 <Link
                   href="/miner"
@@ -316,7 +318,7 @@ export default function DashboardPage({ user }: { user: any }) {
             )}
           </div>
           <p className="text-sm text-gray-400 mt-4">
-            {(hasPaidEntryFee || profile?.exempt_from_entry_fee)
+            {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin)
               ? 'Make sure your profile is complete with a BTC payout address before mining.'
               : 'Pay $1 USD entry fee to unlock mining features.'}
           </p>

@@ -224,11 +224,22 @@ export function handleStratumConnection(ws: WebSocket): void {
             try {
               const { data: profile } = await supabase
                 .from('profiles')
-                .select('has_paid_entry_fee, exempt_from_entry_fee')
+                .select('has_paid_entry_fee, exempt_from_entry_fee, is_admin')
                 .eq('id', meta.userId)
                 .single();
               
-              if (!profile?.has_paid_entry_fee && !profile?.exempt_from_entry_fee) {
+              // Get user email from auth if available
+              let userEmail = '';
+              if (meta.userId) {
+                const { data: { user } } = await supabase.auth.admin.getUserById(meta.userId);
+                userEmail = user?.email || '';
+              }
+              
+              // Admins are automatically exempt
+              const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'senecaone4@gmail.com';
+              const isAdmin = userEmail === ADMIN_EMAIL || profile?.is_admin === true;
+              
+              if (!profile?.has_paid_entry_fee && !profile?.exempt_from_entry_fee && !isAdmin) {
                 console.log('[bridge] User has not paid entry fee, closing connection');
                 ws.send(JSON.stringify({
                   error: 'Entry fee payment required. Please pay $1 USD to start mining.',

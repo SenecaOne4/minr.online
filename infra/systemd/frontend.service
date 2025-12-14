@@ -3,6 +3,7 @@ Description=Minr.online Frontend
 After=network.target
 
 [Service]
+Environment="PORT=3001"
 EnvironmentFile=/etc/minr-frontend.env
 WorkingDirectory=/var/www/minr-online/frontend
 ExecStart=pnpm start

@@ -19,7 +19,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     // Check if user has paid entry fee or is exempt
     const { data: profile } = await supabase!
       .from('profiles')
-      .select('has_paid_entry_fee, exempt_from_entry_fee, btc_payout_address, email')
+      .select('has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
       .eq('id', userId)
       .single();
 
@@ -27,7 +27,11 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       return res.status(404).json({ error: 'Profile not found' });
     }
 
-    if (!profile.has_paid_entry_fee && !profile.exempt_from_entry_fee) {
+    // Admins are automatically exempt
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'senecaone4@gmail.com';
+    const isAdmin = req.user?.email === ADMIN_EMAIL || profile.is_admin === true;
+
+    if (!profile.has_paid_entry_fee && !profile.exempt_from_entry_fee && !isAdmin) {
       return res.status(403).json({ error: 'Entry fee payment required to download miner' });
     }
 
