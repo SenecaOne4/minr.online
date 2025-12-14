@@ -225,9 +225,8 @@ export default function AdminPage() {
           // Token might be expired, try to refresh
           const { data: { session: newSession } } = await supabase.auth.refreshSession();
           if (newSession?.access_token) {
-            // Retry with new token using same URL logic
-            const retryUrl = apiBaseUrl ? `${apiBaseUrl}/api/admin/settings` : '/api/admin/settings';
-            const retryResponse = await fetch(retryUrl, {
+            // Retry with new token using relative URL
+            const retryResponse = await fetch('/api/admin/settings', {
               headers: {
                 Authorization: `Bearer ${newSession.access_token}`,
                 'Content-Type': 'application/json',
