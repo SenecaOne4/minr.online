@@ -37,28 +37,36 @@ export default function AdminPage() {
           setUser(session.user);
           // Check if admin - also check profile for is_admin flag
           const adminCheck = session.user.email === 'senecaone4@gmail.com';
-          setIsAdmin(adminCheck);
           
           // Load profile to check is_admin flag
           const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-          const profileRes = await fetch(`${apiBaseUrl}/api/profile`, {
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          });
-          
-          if (profileRes.ok) {
-            const profileData = await profileRes.json();
-            const isAdminFromProfile = adminCheck || profileData.is_admin === true;
-            setIsAdmin(isAdminFromProfile);
+          try {
+            const profileRes = await fetch(`${apiBaseUrl}/api/profile`, {
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            });
             
-            if (!isAdminFromProfile) {
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
+              const isAdminFromProfile = adminCheck || profileData.is_admin === true;
+              setIsAdmin(isAdminFromProfile);
+              
+              if (!isAdminFromProfile) {
+                window.location.href = '/';
+                return;
+              }
+            } else if (!adminCheck) {
               window.location.href = '/';
               return;
             }
-          } else if (!adminCheck) {
-            window.location.href = '/';
-            return;
+          } catch (error) {
+            // If profile check fails, still allow if email matches
+            if (!adminCheck) {
+              window.location.href = '/';
+              return;
+            }
+            setIsAdmin(adminCheck);
           }
           
           loadSettings();
@@ -199,9 +207,8 @@ export default function AdminPage() {
         return;
       }
 
-      // Use absolute URL if NEXT_PUBLIC_API_URL is set, otherwise use relative
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const url = apiBaseUrl ? `${apiBaseUrl}/api/admin/settings` : '/api/admin/settings';
+      // Always use relative URL for NGINX proxy
+      const url = '/api/admin/settings';
       
       const response = await fetch(url, {
         headers: {

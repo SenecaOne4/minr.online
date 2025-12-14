@@ -33,10 +33,10 @@ export default function ImageLibrary({ folder, onSelect, selectedPath }: ImageLi
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      // Use relative URL for NGINX proxy
       const url = folder
-        ? `${apiBaseUrl}/api/admin/images?folder=${folder}`
-        : `${apiBaseUrl}/api/admin/images`;
+        ? `/api/admin/images?folder=${folder}`
+        : `/api/admin/images`;
 
       const response = await fetch(url, {
         headers: {
@@ -68,8 +68,8 @@ export default function ImageLibrary({ folder, onSelect, selectedPath }: ImageLi
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${apiBaseUrl}/api/admin/images/${encodeURIComponent(path)}`, {
+      // Use relative URL for NGINX proxy
+      const response = await fetch(`/api/admin/images/${encodeURIComponent(path)}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${session.access_token}`,

@@ -70,11 +70,11 @@ export default function ImageUploader({ folder = 'logos', onUploadComplete }: Im
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      // Use relative URL for NGINX proxy
       const formData = new FormData();
       formData.append('image', file);
       
-      const response = await fetch(`${apiBaseUrl}/api/admin/upload-image?folder=${folder}`, {
+      const response = await fetch(`/api/admin/upload-image?folder=${folder}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
