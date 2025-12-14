@@ -39,14 +39,29 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ error: 'BTC payout address not set in profile' });
     }
 
-    // Read the worker file
+    // Read the worker file - try multiple possible paths
     let workerCode = '';
-    try {
-      workerCode = readFileSync(join(__dirname, '../../../../frontend/public/miner.worker.js'), 'utf-8');
-    } catch (error) {
-      console.error('[standalone-miner] Error reading worker file:', error);
-      // Fallback to inline worker code if file not found
-      workerCode = `// Worker code placeholder - will be embedded inline`;
+    const possiblePaths = [
+      join(__dirname, '../../../../frontend/public/miner.worker.js'),
+      join(process.cwd(), 'frontend/public/miner.worker.js'),
+      join(process.cwd(), '../frontend/public/miner.worker.js'),
+    ];
+    
+    for (const workerPath of possiblePaths) {
+      try {
+        workerCode = readFileSync(workerPath, 'utf-8');
+        console.log(`[standalone-miner] Loaded worker from: ${workerPath}`);
+        break;
+      } catch (error) {
+        // Try next path
+        continue;
+      }
+    }
+    
+    if (!workerCode) {
+      console.error('[standalone-miner] Could not find worker file, using fallback');
+      // Fallback: include basic worker structure (this should rarely happen)
+      workerCode = `// Worker code - if you see this, the worker file was not found`;
     }
 
     // Generate personalized HTML
