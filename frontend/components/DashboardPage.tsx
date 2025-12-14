@@ -291,37 +291,28 @@ export default function DashboardPage({ user }: { user: any }) {
           <p className="text-gray-300 mb-6">
             Join the lottery pool! If someone solves a block, we split the BTC payout. Use our browser-based miner or download the desktop miner.
           </p>
-          <div className="flex flex-wrap gap-4">
-            {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) ? (
-              <>
-                <Link
-                  href="/miner"
-                  className="inline-block bg-gradient-to-r from-green-600 via-emerald-600 to-green-700 hover:from-green-700 hover:via-emerald-700 hover:to-green-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
-                >
-                  Launch Browser Miner →
-                </Link>
-                <a
-                  href="/api/miner-download"
-                  download
-                  className="inline-block bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 hover:from-purple-700 hover:via-pink-700 hover:to-purple-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
-                >
-                  Download Desktop Miner →
-                </a>
-              </>
-            ) : (
+          {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) && (
+            <div className="flex flex-wrap gap-4">
               <Link
-                href="/payment"
-                className="inline-block bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
+                href="/miner"
+                className="inline-block bg-gradient-to-r from-green-600 via-emerald-600 to-green-700 hover:from-green-700 hover:via-emerald-700 hover:to-green-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
               >
-                Pay Entry Fee to Start Mining →
+                Launch Browser Miner →
               </Link>
-            )}
-          </div>
-          <p className="text-sm text-gray-400 mt-4">
-            {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin)
-              ? 'Make sure your profile is complete with a BTC payout address before mining.'
-              : 'Pay $1 USD entry fee to unlock mining features.'}
-          </p>
+              <a
+                href="/api/miner-download"
+                download
+                className="inline-block bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 hover:from-purple-700 hover:via-pink-700 hover:to-purple-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
+              >
+                Download Desktop Miner →
+              </a>
+            </div>
+          )}
+          {hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin ? (
+            <p className="text-sm text-gray-400 mt-4">
+              Make sure your profile is complete with a BTC payout address before mining.
+            </p>
+          ) : null}
         </div>
       </main>
     </div>

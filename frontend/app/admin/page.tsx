@@ -34,13 +34,32 @@ export default function AdminPage() {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
           setUser(session.user);
-          // Check if admin
+          // Check if admin - also check profile for is_admin flag
           const adminCheck = session.user.email === 'senecaone4@gmail.com';
           setIsAdmin(adminCheck);
-          if (!adminCheck) {
+          
+          // Load profile to check is_admin flag
+          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+          const profileRes = await fetch(`${apiBaseUrl}/api/profile`, {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+          
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            const isAdminFromProfile = adminCheck || profileData.is_admin === true;
+            setIsAdmin(isAdminFromProfile);
+            
+            if (!isAdminFromProfile) {
+              window.location.href = '/';
+              return;
+            }
+          } else if (!adminCheck) {
             window.location.href = '/';
             return;
           }
+          
           loadSettings();
         } else {
           window.location.href = '/';
