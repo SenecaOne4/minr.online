@@ -360,7 +360,7 @@ function generateLauncherHTML(config: {
       updateProgress(10);
       
       try {
-        // Download install script
+        // Download install script with auth token
         addLog('info', 'Downloading install script...');
         const scriptUrl = \`\${CONFIG.apiUrl}/api/cpu-miner-launcher/install-script/\${platform}\`;
         const scriptResponse = await fetch(scriptUrl, {
@@ -368,6 +368,11 @@ function generateLauncherHTML(config: {
             'Authorization': \`Bearer \${CONFIG.authToken}\`,
           },
         });
+        
+        if (!scriptResponse.ok) {
+          const error = await scriptResponse.json().catch(() => ({ error: 'Failed to download script' }));
+          throw new Error(error.error || 'Failed to download install script');
+        }
         
         if (!scriptResponse.ok) {
           throw new Error('Failed to download install script');
