@@ -13,6 +13,7 @@ interface Profile {
   btc_payout_address: string | null;
   has_paid_entry_fee?: boolean;
   exempt_from_entry_fee?: boolean;
+  is_admin?: boolean;
 }
 
 interface Membership {
