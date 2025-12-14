@@ -145,12 +145,17 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Parse config using jq if available, otherwise use grep
+# Parse config - try jq first, fallback to python, then grep
 if command -v jq &> /dev/null; then
     STRATUM_HOST=$(jq -r '.stratum.host' "$CONFIG_FILE")
     STRATUM_PORT=$(jq -r '.stratum.port' "$CONFIG_FILE")
     WALLET=$(jq -r '.wallet' "$CONFIG_FILE")
     WORKER=$(jq -r '.worker' "$CONFIG_FILE")
+elif command -v python3 &> /dev/null; then
+    STRATUM_HOST=$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d['stratum']['host'])" 2>/dev/null)
+    STRATUM_PORT=$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d['stratum']['port'])" 2>/dev/null)
+    WALLET=$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d['wallet'])" 2>/dev/null)
+    WORKER=$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d['worker'])" 2>/dev/null)
 else
     STRATUM_HOST=$(grep -o '"host": "[^"]*"' "$CONFIG_FILE" | cut -d'"' -f4)
     STRATUM_PORT=$(grep -o '"port": [0-9]*' "$CONFIG_FILE" | grep -o '[0-9]*')
