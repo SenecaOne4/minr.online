@@ -22,7 +22,9 @@ export default function AdminPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<SiteSettings | null>(null);
-  const [activeTab, setActiveTab] = useState<'wallet' | 'branding' | 'navigation' | 'hero'>('wallet');
+  const [activeTab, setActiveTab] = useState<'wallet' | 'branding' | 'navigation' | 'hero' | 'users'>('wallet');
+  const [users, setUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -49,6 +51,107 @@ export default function AdminPage() {
       setLoading(false);
     }
   }, []);
+
+  const loadUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      if (!supabase) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/users`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('[admin] Error loading users:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleMakeAdmin = async (userId: string) => {
+    if (!confirm('Make this user an admin?')) return;
+
+    try {
+      if (!supabase) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/users/${userId}/make-admin`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        loadUsers();
+      }
+    } catch (error) {
+      console.error('[admin] Error making admin:', error);
+    }
+  };
+
+  const handleRemoveAdmin = async (userId: string) => {
+    if (!confirm('Remove admin status from this user?')) return;
+
+    try {
+      if (!supabase) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/users/${userId}/remove-admin`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        loadUsers();
+      }
+    } catch (error) {
+      console.error('[admin] Error removing admin:', error);
+    }
+  };
+
+  const handleExemptFee = async (userId: string, exempt: boolean) => {
+    try {
+      if (!supabase) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/users/${userId}/exempt-fee`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ exempt }),
+      });
+
+      if (response.ok) {
+        loadUsers();
+      }
+    } catch (error) {
+      console.error('[admin] Error updating fee exemption:', error);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -169,10 +272,15 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-white/20">
-          {(['wallet', 'branding', 'navigation', 'hero'] as const).map((tab) => (
+          {(['wallet', 'branding', 'navigation', 'hero', 'users'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => {
+                setActiveTab(tab);
+                if (tab === 'users') {
+                  loadUsers();
+                }
+              }}
               className={`px-6 py-3 font-semibold transition-all duration-200 border-b-2 ${
                 activeTab === tab
                   ? 'border-blue-500 text-blue-400'
@@ -185,7 +293,7 @@ export default function AdminPage() {
         </div>
 
         {/* Tab Content */}
-        <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-purple-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
           {activeTab === 'wallet' && (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold text-white mb-4">Bitcoin Wallet</h2>
@@ -217,12 +325,21 @@ export default function AdminPage() {
                 <ImageUploader folder="favicons" onUploadComplete={(url) => {
                   setSettings({ ...settings, favicon_url: url } as SiteSettings);
                 }} />
+                <div className="mt-4">
+                  <ImageLibrary
+                    folder="favicons"
+                    selectedPath={settings?.favicon_url}
+                    onSelect={(image) => {
+                      setSettings({ ...settings, favicon_url: image.url } as SiteSettings);
+                    }}
+                  />
+                </div>
                 {settings?.favicon_url && (
-                  <div className="mt-4">
-                    <img src={settings.favicon_url} alt="Favicon" className="w-16 h-16" />
+                  <div className="mt-4 flex items-center gap-4">
+                    <img src={settings.favicon_url} alt="Favicon" className="w-16 h-16 rounded-lg border-2 border-white/20" />
                     <button
                       onClick={() => setSettings({ ...settings, favicon_url: undefined } as SiteSettings)}
-                      className="mt-2 text-red-400 text-sm"
+                      className="text-red-400 hover:text-red-300 text-sm transition-colors"
                     >
                       Remove
                     </button>
@@ -304,12 +421,103 @@ export default function AdminPage() {
             </div>
           )}
 
+          {activeTab === 'users' && (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold text-white mb-4">User Management</h2>
+              {loadingUsers ? (
+                <div className="text-center text-white py-8">Loading users...</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-white/20">
+                        <th className="px-4 py-3 text-gray-300 font-semibold">Email</th>
+                        <th className="px-4 py-3 text-gray-300 font-semibold">Username</th>
+                        <th className="px-4 py-3 text-gray-300 font-semibold">Admin</th>
+                        <th className="px-4 py-3 text-gray-300 font-semibold">Paid Entry</th>
+                        <th className="px-4 py-3 text-gray-300 font-semibold">Exempt</th>
+                        <th className="px-4 py-3 text-gray-300 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id} className="border-b border-white/10 hover:bg-white/5">
+                          <td className="px-4 py-3 text-white">{u.email || 'N/A'}</td>
+                          <td className="px-4 py-3 text-gray-300">{u.username || '-'}</td>
+                          <td className="px-4 py-3">
+                            {u.is_admin ? (
+                              <span className="text-green-400 font-semibold">Yes</span>
+                            ) : (
+                              <span className="text-gray-400">No</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {u.has_paid_entry_fee ? (
+                              <span className="text-green-400">Yes</span>
+                            ) : (
+                              <span className="text-red-400">No</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {u.exempt_from_entry_fee ? (
+                              <span className="text-yellow-400">Yes</span>
+                            ) : (
+                              <span className="text-gray-400">No</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2 flex-wrap">
+                              {!u.is_admin && (
+                                <button
+                                  onClick={() => handleMakeAdmin(u.id)}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors"
+                                >
+                                  Make Admin
+                                </button>
+                              )}
+                              {u.is_admin && u.id !== user?.id && (
+                                <button
+                                  onClick={() => handleRemoveAdmin(u.id)}
+                                  className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded-lg text-sm transition-colors"
+                                >
+                                  Remove Admin
+                                </button>
+                              )}
+                              {!u.exempt_from_entry_fee ? (
+                                <button
+                                  onClick={() => handleExemptFee(u.id, true)}
+                                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm transition-colors"
+                                >
+                                  Exempt Fee
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleExemptFee(u.id, false)}
+                                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm transition-colors"
+                                >
+                                  Remove Exempt
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {users.length === 0 && (
+                    <div className="text-center text-gray-400 py-8">No users found</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Save Button */}
           <div className="mt-8 pt-6 border-t border-white/20">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl disabled:opacity-50"
+              className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl disabled:opacity-50 transform hover:scale-[1.02]"
             >
               {saving ? 'Saving...' : 'Save Settings'}
             </button>

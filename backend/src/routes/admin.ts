@@ -253,5 +253,132 @@ router.post('/payments/verify/:id', async (req: AuthenticatedRequest, res: Respo
   }
 });
 
+// GET /api/admin/users - List all users
+router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
+    const { data: profiles, error: profilesError } = await supabase!
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (profilesError) {
+      return res.status(400).json({ error: profilesError.message });
+    }
+
+    // Get user emails from auth.users
+    const userIds = profiles.map(p => p.id);
+    const { data: users, error: usersError } = await supabase!
+      .auth.admin.listUsers();
+
+    if (usersError) {
+      console.error('[admin] Error fetching users:', usersError);
+    }
+
+    // Merge profile data with auth user data
+    const usersWithProfiles = profiles.map(profile => {
+      const authUser = users?.users.find(u => u.id === profile.id);
+      return {
+        ...profile,
+        email: authUser?.email || 'N/A',
+        created_at: authUser?.created_at || profile.created_at,
+      };
+    });
+
+    res.json(usersWithProfiles || []);
+  } catch (error: any) {
+    console.error('[admin] Error fetching users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/admin/users/:id/make-admin - Make a user admin
+router.post('/users/:id/make-admin', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
+    const userId = req.params.id;
+
+    const { error } = await supabase!
+      .from('profiles')
+      .update({ is_admin: true })
+      .eq('id', userId);
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[admin] Error making user admin:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/admin/users/:id/remove-admin - Remove admin status
+router.post('/users/:id/remove-admin', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
+    const userId = req.params.id;
+
+    // Prevent removing yourself
+    if (userId === req.user!.id) {
+      return res.status(400).json({ error: 'Cannot remove your own admin status' });
+    }
+
+    const { error } = await supabase!
+      .from('profiles')
+      .update({ is_admin: false })
+      .eq('id', userId);
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[admin] Error removing admin:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/admin/users/:id/exempt-fee - Exempt user from entry fee
+router.post('/users/:id/exempt-fee', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
+    const userId = req.params.id;
+    const { exempt } = req.body;
+
+    const { error } = await supabase!
+      .from('profiles')
+      .update({ 
+        exempt_from_entry_fee: exempt !== false,
+        has_paid_entry_fee: exempt !== false,
+        entry_fee_paid_at: exempt !== false ? new Date().toISOString() : null,
+      })
+      .eq('id', userId);
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[admin] Error updating fee exemption:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
 

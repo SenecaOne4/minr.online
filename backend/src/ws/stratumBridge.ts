@@ -1,21 +1,35 @@
 import WebSocket from 'ws';
 import net from 'net';
+import { supabase } from '../supabaseClient';
 
 const STRATUM_UPSTREAM = process.env.STRATUM_UPSTREAM ?? 'solo.ckpool.org:3333';
-const BTC_MINING_USERNAME = process.env.BTC_MINING_USERNAME ?? 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
 const BTC_MINING_PASSWORD = process.env.BTC_MINING_PASSWORD ?? 'x';
 
 interface ConnectionMeta {
   userId?: string;
   sessionId?: string;
+  miningSessionId?: string;
+  currentJob?: any;
+  shareCount: number;
+  acceptedShares: number;
+  rejectedShares: number;
+  totalHashes: number;
+  startTime?: number;
 }
 
 export function handleStratumConnection(ws: WebSocket): void {
   console.log('[bridge] WebSocket client connected');
 
-  // Connection metadata for future multi-user accounting
-  const meta: ConnectionMeta = {};
+  // Connection metadata for tracking
+  const meta: ConnectionMeta = {
+    shareCount: 0,
+    acceptedShares: 0,
+    rejectedShares: 0,
+    totalHashes: 0,
+  };
   let metaReceived = false;
+  let paymentChecked = false;
+  let adminWallet = '';
 
   // Parse upstream address
   const [host, portStr] = STRATUM_UPSTREAM.split(':');
@@ -27,6 +41,26 @@ export function handleStratumConnection(ws: WebSocket): void {
     return;
   }
 
+  // Get admin wallet from site settings
+  (async () => {
+    if (supabase) {
+      try {
+        const { data: settings } = await supabase
+          .from('site_settings')
+          .select('admin_btc_wallet')
+          .eq('id', '00000000-0000-0000-0000-000000000000')
+          .single();
+        
+        if (settings?.admin_btc_wallet) {
+          adminWallet = settings.admin_btc_wallet;
+        }
+      } catch (error) {
+        console.warn('[bridge] Could not fetch admin wallet, using default');
+        adminWallet = process.env.BTC_MINING_USERNAME ?? 'bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47';
+      }
+    }
+  })();
+
   // Create TCP connection to Stratum pool
   const tcpSocket = net.createConnection(port, host);
 
@@ -34,7 +68,7 @@ export function handleStratumConnection(ws: WebSocket): void {
     console.log(`[bridge] TCP connection established to ${STRATUM_UPSTREAM}`);
   });
 
-  tcpSocket.on('data', (data: Buffer) => {
+  tcpSocket.on('data', async (data: Buffer) => {
     // Forward TCP → WebSocket (as UTF-8 text)
     const chunk = data.toString('utf8');
     console.log('[bridge] ← upstream', chunk.slice(0, 200));
@@ -57,12 +91,81 @@ export function handleStratumConnection(ws: WebSocket): void {
             }
           }
           
-          // Log submit responses
+          // Log submit responses and update share status
           if (parsed.id && parsed.id >= 3 && parsed.id < 100) {
             if (parsed.result === true) {
               console.log('[bridge] ✅ Submit SUCCESS (ID:', parsed.id, ')');
+              
+              // Update share status to accepted
+              if (meta.userId && supabase) {
+                try {
+                  await supabase
+                    .from('share_submissions')
+                    .update({ status: 'accepted' })
+                    .eq('user_id', meta.userId)
+                    .eq('status', 'pending')
+                    .order('submitted_at', { ascending: false })
+                    .limit(1);
+                  
+                  meta.acceptedShares++;
+                  
+                  // Update session stats
+                  if (meta.miningSessionId) {
+                    await supabase
+                      .from('mining_sessions')
+                      .update({
+                        accepted_shares: meta.acceptedShares,
+                      })
+                      .eq('id', meta.miningSessionId);
+                  }
+                } catch (error: any) {
+                  console.error('[bridge] Error updating share status:', error.message);
+                }
+              }
             } else {
               console.log('[bridge] ❌ Submit FAILED (ID:', parsed.id, '):', parsed.error || 'Unknown error');
+              
+              // Update share status to rejected
+              if (meta.userId && supabase) {
+                try {
+                  await supabase
+                    .from('share_submissions')
+                    .update({ status: 'rejected' })
+                    .eq('user_id', meta.userId)
+                    .eq('status', 'pending')
+                    .order('submitted_at', { ascending: false })
+                    .limit(1);
+                  
+                  meta.rejectedShares++;
+                  
+                  // Update session stats
+                  if (meta.miningSessionId) {
+                    await supabase
+                      .from('mining_sessions')
+                      .update({
+                        rejected_shares: meta.rejectedShares,
+                      })
+                      .eq('id', meta.miningSessionId);
+                  }
+                } catch (error: any) {
+                  console.error('[bridge] Error updating share status:', error.message);
+                }
+              }
+            }
+          }
+          
+          // Handle mining.notify to track current job
+          if (parsed.method === 'mining.notify' && parsed.params) {
+            meta.currentJob = {
+              jobId: parsed.params[0],
+              difficulty: meta.currentJob?.difficulty,
+            };
+          }
+          
+          // Handle mining.set_difficulty
+          if (parsed.method === 'mining.set_difficulty' && parsed.params && parsed.params[0]) {
+            if (meta.currentJob) {
+              meta.currentJob.difficulty = parsed.params[0];
             }
           }
         } catch (e) {
@@ -114,6 +217,51 @@ export function handleStratumConnection(ws: WebSocket): void {
         meta.sessionId = parsed.sessionId;
         metaReceived = true;
         console.log('[bridge] meta from client', meta);
+        
+        // Check payment status before allowing mining (async IIFE)
+        (async () => {
+          if (meta.userId && supabase) {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('has_paid_entry_fee, exempt_from_entry_fee')
+                .eq('id', meta.userId)
+                .single();
+              
+              if (!profile?.has_paid_entry_fee && !profile?.exempt_from_entry_fee) {
+                console.log('[bridge] User has not paid entry fee, closing connection');
+                ws.send(JSON.stringify({
+                  error: 'Entry fee payment required. Please pay $1 USD to start mining.',
+                  code: 'PAYMENT_REQUIRED',
+                }));
+                ws.close(1008, 'Payment required');
+                return;
+              }
+              
+              paymentChecked = true;
+              
+              // Create mining session
+              const { data: session, error: sessionError } = await supabase
+                .from('mining_sessions')
+                .insert({
+                  user_id: meta.userId,
+                  worker_name: parsed.workerName || `worker-${meta.sessionId}`,
+                  started_at: new Date().toISOString(),
+                })
+                .select()
+                .single();
+              
+              if (!sessionError && session) {
+                meta.miningSessionId = session.id;
+                meta.startTime = Date.now();
+                console.log('[bridge] Mining session created:', session.id);
+              }
+            } catch (error: any) {
+              console.error('[bridge] Error checking payment:', error.message);
+            }
+          }
+        })();
+        
         // Do NOT forward meta messages to TCP socket
         return;
       }
@@ -145,13 +293,38 @@ export function handleStratumConnection(ws: WebSocket): void {
       // Check if this is a mining.submit message
       if (parsed && typeof parsed === 'object' && parsed.method === 'mining.submit') {
         const submitParams = parsed.params || [];
+        const jobId = submitParams[1];
+        const nonce = submitParams[4];
+        
         console.log('[bridge] ← client submit (ID:', parsed.id, '):', {
           worker: submitParams[0],
-          jobId: submitParams[1],
+          jobId,
           extranonce2: submitParams[2],
           ntime: submitParams[3],
-          nonce: submitParams[4],
+          nonce,
         });
+        
+        // Record share submission (async IIFE)
+        if (meta.userId && meta.miningSessionId && supabase) {
+          (async () => {
+            try {
+              await supabase
+                .from('share_submissions')
+                .insert({
+                  user_id: meta.userId,
+                  session_id: meta.miningSessionId,
+                  job_id: jobId,
+                  nonce: nonce,
+                  status: 'pending',
+                  difficulty: meta.currentJob?.difficulty || 1,
+                });
+              
+              meta.shareCount++;
+            } catch (error: any) {
+              console.error('[bridge] Error recording share:', error.message);
+            }
+          })();
+        }
         
         // Forward to TCP upstream (add newline for Stratum protocol)
         tcpSocket.write(messageStr.trim() + '\n');
@@ -171,8 +344,33 @@ export function handleStratumConnection(ws: WebSocket): void {
     tcpSocket.write(outboundStr);
   });
 
-  ws.on('close', () => {
+  ws.on('close', async () => {
     console.log('[bridge] WebSocket client disconnected');
+    
+    // End mining session
+    if (meta.miningSessionId && supabase) {
+      try {
+        const endTime = Date.now();
+        const duration = meta.startTime ? (endTime - meta.startTime) / 1000 : 0;
+        const avgHashrate = duration > 0 ? meta.totalHashes / duration : 0;
+        
+        await supabase
+          .from('mining_sessions')
+          .update({
+            ended_at: new Date().toISOString(),
+            total_hashes: meta.totalHashes,
+            accepted_shares: meta.acceptedShares,
+            rejected_shares: meta.rejectedShares,
+            avg_hashrate: avgHashrate,
+          })
+          .eq('id', meta.miningSessionId);
+        
+        console.log('[bridge] Mining session ended:', meta.miningSessionId);
+      } catch (error: any) {
+        console.error('[bridge] Error ending session:', error.message);
+      }
+    }
+    
     if (!tcpSocket.destroyed) {
       tcpSocket.end();
     }

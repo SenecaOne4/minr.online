@@ -93,7 +93,6 @@ export default function Home() {
       <>
         <SiteMeta settings={siteSettings || undefined} />
         <HeroSection settings={siteSettings || undefined} />
-        <LoginPage />
       </>
     );
   }

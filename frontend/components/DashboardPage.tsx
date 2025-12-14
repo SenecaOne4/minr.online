@@ -11,6 +11,8 @@ interface Profile {
   id: string;
   username: string | null;
   btc_payout_address: string | null;
+  has_paid_entry_fee?: boolean;
+  exempt_from_entry_fee?: boolean;
 }
 
 interface Membership {
@@ -61,7 +63,7 @@ export default function DashboardPage({ user }: { user: any }) {
         setProfile(profileData);
         setUsername(profileData.username || '');
         setBtcAddress(profileData.btc_payout_address || '');
-        setHasPaidEntryFee(profileData.has_paid_entry_fee || false);
+        setHasPaidEntryFee(profileData.has_paid_entry_fee || profileData.exempt_from_entry_fee || false);
       }
 
       // Fetch membership
@@ -155,7 +157,7 @@ export default function DashboardPage({ user }: { user: any }) {
         </div>
 
         {/* Payment Gate */}
-        {!hasPaidEntryFee && (
+        {!hasPaidEntryFee && !profile?.exempt_from_entry_fee && (
           <div className="mb-6">
             <PaymentGate />
           </div>
@@ -163,7 +165,7 @@ export default function DashboardPage({ user }: { user: any }) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Profile Card */}
-          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-purple-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
             <h2 className="text-2xl font-bold mb-4 text-white">Profile</h2>
             {editing ? (
               <div className="space-y-4">
@@ -194,7 +196,7 @@ export default function DashboardPage({ user }: { user: any }) {
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveProfile}
-                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
+                    className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-4 py-2 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
                   >
                     Save
                   </button>
@@ -226,7 +228,7 @@ export default function DashboardPage({ user }: { user: any }) {
                 </div>
                 <button
                   onClick={() => setEditing(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
                 >
                   Edit Profile
                 </button>
@@ -244,7 +246,7 @@ export default function DashboardPage({ user }: { user: any }) {
           </div>
 
           {/* Membership Card */}
-          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
             <h2 className="text-2xl font-bold mb-4 text-white">Membership</h2>
             {membership ? (
               <div className="space-y-2">
@@ -272,9 +274,9 @@ export default function DashboardPage({ user }: { user: any }) {
         </div>
 
         {/* Analytics Section */}
-        {hasPaidEntryFee && (
+        {(hasPaidEntryFee || profile?.exempt_from_entry_fee) && (
           <div className="mb-6">
-            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-green-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
               <h2 className="text-2xl font-bold mb-4 text-white">Mining Analytics</h2>
               <AnalyticsDashboard />
             </div>
@@ -282,24 +284,24 @@ export default function DashboardPage({ user }: { user: any }) {
         )}
 
         {/* Mining Section */}
-        <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-purple-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
           <h2 className="text-2xl font-bold mb-4 text-white">Start Mining</h2>
           <p className="text-gray-300 mb-6">
             Join the lottery pool! If someone solves a block, we split the BTC payout. Use our browser-based miner or download the desktop miner.
           </p>
           <div className="flex flex-wrap gap-4">
-            {hasPaidEntryFee ? (
+            {(hasPaidEntryFee || profile?.exempt_from_entry_fee) ? (
               <>
                 <Link
                   href="/miner"
-                  className="inline-block bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+                  className="inline-block bg-gradient-to-r from-green-600 via-emerald-600 to-green-700 hover:from-green-700 hover:via-emerald-700 hover:to-green-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
                 >
                   Launch Browser Miner →
                 </Link>
                 <a
                   href="/api/miner-download"
                   download
-                  className="inline-block bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+                  className="inline-block bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 hover:from-purple-700 hover:via-pink-700 hover:to-purple-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
                 >
                   Download Desktop Miner →
                 </a>
@@ -307,14 +309,14 @@ export default function DashboardPage({ user }: { user: any }) {
             ) : (
               <Link
                 href="/payment"
-                className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+                className="inline-block bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
               >
                 Pay Entry Fee to Start Mining →
               </Link>
             )}
           </div>
           <p className="text-sm text-gray-400 mt-4">
-            {hasPaidEntryFee
+            {(hasPaidEntryFee || profile?.exempt_from_entry_fee)
               ? 'Make sure your profile is complete with a BTC payout address before mining.'
               : 'Pay $1 USD entry fee to unlock mining features.'}
           </p>
