@@ -17,10 +17,16 @@ export default function HeroSection({ settings }: HeroSectionProps) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [imageError, setImageError] = useState(false);
   
   const title = settings?.hero_title || 'Minr.online';
   const subtitle = settings?.hero_subtitle || 'Bitcoin Lottery Pool Mining Platform';
   const backgroundImage = settings?.hero_image_url;
+
+  // Reset image error when background image changes
+  useEffect(() => {
+    setImageError(false);
+  }, [backgroundImage]);
 
   // Check for auth errors in URL hash on mount
   useEffect(() => {
@@ -39,6 +45,9 @@ export default function HeroSection({ settings }: HeroSectionProps) {
     }
   }, []);
 
+  const [password, setPassword] = useState('');
+  const [usePassword, setUsePassword] = useState(false);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -52,37 +61,57 @@ export default function HeroSection({ settings }: HeroSectionProps) {
 
     const redirectUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${redirectUrl}/`,
-      },
-    });
+    if (usePassword && password) {
+      // Password login
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+      if (error) {
+        setMessage(`Error: ${error.message}`);
+      } else {
+        // Success - page will redirect automatically
+        window.location.href = '/';
+      }
     } else {
-      setMessage('Check your email for the login link!');
+      // Magic link login
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${redirectUrl}/`,
+        },
+      });
+
+      if (error) {
+        setMessage(`Error: ${error.message}`);
+      } else {
+        setMessage('Check your email for the login link!');
+      }
     }
 
     setLoading(false);
   };
 
   return (
-    <div
-      className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900"
-      style={
-        backgroundImage
-          ? {
-              backgroundImage: `url(${backgroundImage})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }
-          : undefined
-      }
-    >
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
+      {/* Background image with error handling */}
       {backgroundImage && (
-        <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-purple-900/30 to-black/70 backdrop-blur-sm" />
+        <>
+          <img
+            src={backgroundImage}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover z-0"
+            onError={() => setImageError(true)}
+            onLoad={() => setImageError(false)}
+          />
+          {!imageError && (
+            <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-purple-900/30 to-black/70 backdrop-blur-sm z-[1]" />
+          )}
+        </>
+      )}
+      {(!backgroundImage || imageError) && (
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 z-0" />
       )}
       <div className="relative z-10 max-w-4xl mx-auto px-4 w-full">
         <div className="text-center mb-8">
@@ -113,9 +142,36 @@ export default function HeroSection({ settings }: HeroSectionProps) {
                 className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm transition-all duration-200"
                 placeholder="your@email.com"
               />
-              <p className="text-xs text-gray-400 mt-2">
-                We'll send you a magic link to sign in
-              </p>
+            </div>
+
+            {usePassword && (
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required={usePassword}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm transition-all duration-200"
+                  placeholder="Enter your password"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="usePassword"
+                checked={usePassword}
+                onChange={(e) => setUsePassword(e.target.checked)}
+                className="w-4 h-4 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-2 focus:ring-blue-500"
+              />
+              <label htmlFor="usePassword" className="text-sm text-gray-300 cursor-pointer">
+                I have a password (login directly)
+              </label>
             </div>
 
             <button
@@ -123,7 +179,10 @@ export default function HeroSection({ settings }: HeroSectionProps) {
               disabled={loading}
               className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
             >
-              {loading ? 'Sending Magic Link...' : 'Send Magic Link'}
+              {loading 
+                ? (usePassword ? 'Logging in...' : 'Sending Magic Link...') 
+                : (usePassword ? 'Login' : 'Send Magic Link')
+              }
             </button>
           </form>
 

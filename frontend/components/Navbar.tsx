@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import ProfileDropdown from './ProfileDropdown';
 
 interface NavbarProps {
   userEmail?: string;
@@ -23,8 +24,8 @@ export default function Navbar({ userEmail, isAdmin }: NavbarProps) {
 
   const loadNavigationSettings = async () => {
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${apiBaseUrl}/api/admin/settings`);
+      // Use relative URL for NGINX proxy
+      const response = await fetch('/api/admin/settings/public');
       
       if (response.ok) {
         const settings = await response.json();
@@ -34,6 +35,7 @@ export default function Navbar({ userEmail, isAdmin }: NavbarProps) {
       }
     } catch (error) {
       // Use default navigation if settings fail
+      console.error('Error loading navigation settings:', error);
       setNavigationItems([
         { label: 'Dashboard', href: '/' },
         { label: 'Miner', href: '/miner' },
@@ -84,15 +86,16 @@ export default function Navbar({ userEmail, isAdmin }: NavbarProps) {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            {userEmail && (
-              <span className="text-sm text-gray-300 hidden sm:block">{userEmail}</span>
+            {userEmail ? (
+              <ProfileDropdown userEmail={userEmail} onLogout={handleLogout} />
+            ) : (
+              <Link
+                href="/"
+                className="text-sm text-gray-300 hover:text-white px-3 py-2 rounded-md transition-colors"
+              >
+                Login
+              </Link>
             )}
-            <button
-              onClick={handleLogout}
-              className="text-sm text-red-400 hover:text-red-300 px-3 py-2 rounded-md transition-colors"
-            >
-              Logout
-            </button>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PaymentGate from '@/components/PaymentGate';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
+import MembershipTierCard from '@/components/MembershipTierCard';
 
 interface Profile {
   id: string;
@@ -69,7 +70,7 @@ export default function DashboardPage({ user }: { user: any }) {
         setHasPaidEntryFee(profileData.has_paid_entry_fee || profileData.exempt_from_entry_fee || isAdminUser);
       }
 
-      // Fetch membership
+      // Fetch membership (returns null if not found, not 404)
       const membershipRes = await fetch(`${apiBaseUrl}/api/membership`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -78,7 +79,12 @@ export default function DashboardPage({ user }: { user: any }) {
 
       if (membershipRes.ok) {
         const membershipData = await membershipRes.json();
-        setMembership(membershipData);
+        // Handle null response (no membership found)
+        if (membershipData) {
+          setMembership(membershipData);
+        } else {
+          setMembership(null);
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -249,31 +255,11 @@ export default function DashboardPage({ user }: { user: any }) {
           </div>
 
           {/* Membership Card */}
-          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
-            <h2 className="text-2xl font-bold mb-4 text-white">Membership</h2>
-            {membership ? (
-              <div className="space-y-2">
-                <div>
-                  <p className="text-sm text-gray-400">Status</p>
-                  <p className={`text-lg font-semibold ${
-                    membership.status === 'active' ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {membership.status.toUpperCase()}
-                  </p>
-                </div>
-                {membership.expires_at && (
-                  <div>
-                    <p className="text-sm text-gray-400">Expires At</p>
-                    <p className="text-lg text-white">
-                      {new Date(membership.expires_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-gray-400">No membership found</p>
-            )}
-          </div>
+          <MembershipTierCard 
+            membership={membership}
+            isExempt={profile?.exempt_from_entry_fee || false}
+            isAdmin={profile?.is_admin || false}
+          />
         </div>
 
         {/* Analytics Section */}
@@ -307,6 +293,32 @@ export default function DashboardPage({ user }: { user: any }) {
               >
                 Download Desktop Miner →
               </a>
+              <div className="mt-6 pt-6 border-t border-white/10 space-y-3">
+                <p className="text-sm font-semibold text-white">What's included:</p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
+                  <li>Your Bitcoin wallet address pre-configured</li>
+                  <li>Connection settings to the pool</li>
+                  <li>GUI and CLI modes</li>
+                  <li>Real-time statistics reporting</li>
+                </ul>
+                <div className="pt-3">
+                  <p className="text-sm font-semibold text-white mb-2">How to use:</p>
+                  <div className="bg-black/30 border border-white/20 rounded-lg p-3 font-mono text-sm text-green-400">
+                    <code>python minr-miner.py</code>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    For CLI mode: <code className="bg-black/30 px-1 rounded">python minr-miner.py --cli</code>
+                  </p>
+                </div>
+                <div className="pt-3">
+                  <Link
+                    href="/miners"
+                    className="text-sm text-blue-400 hover:text-blue-300 underline"
+                  >
+                    View full miner instructions (CPU, ASIC, Desktop) →
+                  </Link>
+                </div>
+              </div>
             </div>
           )}
           {hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin ? (

@@ -545,7 +545,7 @@ export default function MinerPage() {
           }
           
           // Load admin wallet from settings (public endpoint)
-          const settingsRes = await fetch(`${apiBaseUrl}/api/admin/settings`);
+          const settingsRes = await fetch('/api/admin/settings/public');
           if (settingsRes.ok) {
             const settingsData = await settingsRes.json();
             setAdminWallet(settingsData.admin_btc_wallet || '');
@@ -572,7 +572,7 @@ export default function MinerPage() {
   // Show loading or redirect if not authenticated
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
         <div className="text-xl text-white">Loading...</div>
       </div>
     );
@@ -584,7 +584,7 @@ export default function MinerPage() {
       window.location.href = '/';
     }
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
         <div className="text-xl text-white">Redirecting to login...</div>
       </div>
     );
@@ -592,7 +592,7 @@ export default function MinerPage() {
 
   if (!hasPaidEntryFee) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
         <Navbar userEmail={user?.email} isAdmin={isAdmin} />
         <div className="flex items-center justify-center min-h-[80vh]">
           <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-8 shadow-2xl max-w-md text-center">
@@ -613,7 +613,7 @@ export default function MinerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 text-white">
       <Navbar userEmail={user?.email} />
       <div className="max-w-7xl mx-auto p-4">
         {/* Header */}

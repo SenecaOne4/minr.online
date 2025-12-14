@@ -122,7 +122,12 @@ export async function listImages(folder?: string): Promise<string[]> {
     throw new Error(`Failed to list images: ${error.message}`);
   }
 
-  return (data || []).map(file => (folder ? `${folder}/${file.name}` : file.name));
+  // Return full paths for files
+  return (data || []).map(file => {
+    // If folder is specified, files are already in that folder
+    // If no folder, file.name is the full path
+    return folder ? `${folder}/${file.name}` : file.name;
+  });
 }
 
 /**

@@ -21,8 +21,13 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       .limit(1)
       .single();
 
+    // Return 200 with null instead of 404 when no membership found
+    if (error && error.code === 'PGRST116') {
+      return res.json(null);
+    }
+
     if (error) {
-      return res.status(404).json({ error: 'Membership not found' });
+      return res.status(500).json({ error: error.message });
     }
 
     res.json(data);

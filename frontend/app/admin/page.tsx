@@ -267,8 +267,8 @@ export default function AdminPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${apiBaseUrl}/api/admin/settings`, {
+      // Use relative URL for NGINX proxy
+      const response = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -293,18 +293,18 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
         <div className="text-xl text-white">Loading...</div>
       </div>
     );
   }
 
-  if (!user || user.email !== 'senecaone4@gmail.com') {
+  if (!user || !isAdmin) {
     return null;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
       <Navbar userEmail={user.email} isAdmin={isAdmin} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
@@ -412,6 +412,25 @@ export default function AdminPage() {
                     }}
                   />
                 </div>
+                {settings?.logo_url && (
+                  <div className="mt-4 flex items-center gap-4">
+                    <img 
+                      src={settings.logo_url} 
+                      alt="Site Logo" 
+                      className="max-w-md h-32 object-contain rounded-lg border-2 border-white/20"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="200"%3E%3Crect fill="%23999" width="400" height="200"/%3E%3Ctext fill="%23fff" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not found%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                    <button
+                      onClick={() => setSettings({ ...settings, logo_url: undefined } as SiteSettings)}
+                      className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* OG Image */}
@@ -420,9 +439,32 @@ export default function AdminPage() {
                 <ImageUploader folder="og-images" onUploadComplete={(url) => {
                   setSettings({ ...settings, og_image_url: url } as SiteSettings);
                 }} />
+                <div className="mt-4">
+                  <ImageLibrary
+                    folder="og-images"
+                    selectedPath={settings?.og_image_url}
+                    onSelect={(image) => {
+                      setSettings({ ...settings, og_image_url: image.url } as SiteSettings);
+                    }}
+                  />
+                </div>
                 {settings?.og_image_url && (
-                  <div className="mt-4">
-                    <img src={settings.og_image_url} alt="OG Image" className="max-w-md rounded-lg" />
+                  <div className="mt-4 flex items-center gap-4">
+                    <img 
+                      src={settings.og_image_url} 
+                      alt="OG Image" 
+                      className="max-w-md rounded-lg border-2 border-white/20 object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="200"%3E%3Crect fill="%23999" width="400" height="200"/%3E%3Ctext fill="%23fff" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not found%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                    <button
+                      onClick={() => setSettings({ ...settings, og_image_url: undefined } as SiteSettings)}
+                      className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                    >
+                      Remove
+                    </button>
                   </div>
                 )}
               </div>
@@ -432,7 +474,99 @@ export default function AdminPage() {
           {activeTab === 'navigation' && (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold text-white mb-4">Navigation</h2>
-              <p className="text-gray-400">Navigation configuration coming soon</p>
+              <p className="text-gray-400 mb-6">Configure navigation menu items</p>
+              
+              <div className="space-y-4">
+                {(settings?.navigation_items || []).map((item: { label: string; href: string }, index: number) => (
+                  <div key={index} className="flex gap-2 items-center backdrop-blur-xl bg-white/5 border border-white/20 rounded-xl p-4">
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => {
+                          if (index > 0) {
+                            const newItems = [...(settings?.navigation_items || [])];
+                            [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
+                            setSettings({ ...settings, navigation_items: newItems } as SiteSettings);
+                          }
+                        }}
+                        disabled={index === 0}
+                        className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Move up"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() => {
+                          const items = settings?.navigation_items || [];
+                          if (index < items.length - 1) {
+                            const newItems = [...items];
+                            [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
+                            setSettings({ ...settings, navigation_items: newItems } as SiteSettings);
+                          }
+                        }}
+                        disabled={index === (settings?.navigation_items || []).length - 1}
+                        className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Move down"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                    <div className="flex-1 grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Label</label>
+                        <input
+                          type="text"
+                          value={item.label}
+                          onChange={(e) => {
+                            const newItems = [...(settings?.navigation_items || [])];
+                            newItems[index] = { ...newItems[index], label: e.target.value };
+                            setSettings({ ...settings, navigation_items: newItems } as SiteSettings);
+                          }}
+                          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                          placeholder="Menu Label"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">URL</label>
+                        <input
+                          type="text"
+                          value={item.href}
+                          onChange={(e) => {
+                            const newItems = [...(settings?.navigation_items || [])];
+                            newItems[index] = { ...newItems[index], href: e.target.value };
+                            setSettings({ ...settings, navigation_items: newItems } as SiteSettings);
+                          }}
+                          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm font-mono text-sm"
+                          placeholder="/path"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const newItems = [...(settings?.navigation_items || [])];
+                        newItems.splice(index, 1);
+                        setSettings({ ...settings, navigation_items: newItems } as SiteSettings);
+                      }}
+                      className="text-red-400 hover:text-red-300 px-3 py-2 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                
+                <button
+                  onClick={() => {
+                    const newItems = [...(settings?.navigation_items || []), { label: '', href: '' }];
+                    setSettings({ ...settings, navigation_items: newItems } as SiteSettings);
+                  }}
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                >
+                  + Add Navigation Item
+                </button>
+                
+                {(settings?.navigation_items || []).length === 0 && (
+                  <p className="text-gray-400 text-center py-8">No navigation items. Click "Add Navigation Item" to create one.</p>
+                )}
+              </div>
             </div>
           )}
 
@@ -462,9 +596,32 @@ export default function AdminPage() {
                 <ImageUploader folder="hero-images" onUploadComplete={(url) => {
                   setSettings({ ...settings, hero_image_url: url } as SiteSettings);
                 }} />
+                <div className="mt-4">
+                  <ImageLibrary
+                    folder="hero-images"
+                    selectedPath={settings?.hero_image_url}
+                    onSelect={(image) => {
+                      setSettings({ ...settings, hero_image_url: image.url } as SiteSettings);
+                    }}
+                  />
+                </div>
                 {settings?.hero_image_url && (
-                  <div className="mt-4">
-                    <img src={settings.hero_image_url} alt="Hero" className="max-w-md rounded-lg" />
+                  <div className="mt-4 flex items-center gap-4">
+                    <img 
+                      src={settings.hero_image_url} 
+                      alt="Hero Background" 
+                      className="max-w-md rounded-lg border-2 border-white/20 object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="200"%3E%3Crect fill="%23999" width="400" height="200"/%3E%3Ctext fill="%23fff" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not found%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                    <button
+                      onClick={() => setSettings({ ...settings, hero_image_url: undefined } as SiteSettings)}
+                      className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                    >
+                      Remove
+                    </button>
                   </div>
                 )}
               </div>

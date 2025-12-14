@@ -14,7 +14,44 @@ const upload = multer({
 });
 const SETTINGS_ID = '00000000-0000-0000-0000-000000000000';
 
-// All admin routes require authentication and admin access
+// Public settings endpoint (no auth required)
+router.get('/settings/public', async (req, res: Response) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
+    const { data, error } = await supabase!
+      .from('site_settings')
+      .select('hero_title, hero_subtitle, hero_image_url, navigation_items, admin_btc_wallet')
+      .eq('id', SETTINGS_ID)
+      .single();
+
+    if (error) {
+      // Return empty settings instead of 404
+      return res.json({
+        hero_title: null,
+        hero_subtitle: null,
+        hero_image_url: null,
+        navigation_items: null,
+        admin_btc_wallet: null,
+      });
+    }
+
+    res.json(data || {
+      hero_title: null,
+      hero_subtitle: null,
+      hero_image_url: null,
+      navigation_items: null,
+      admin_btc_wallet: null,
+    });
+  } catch (error: any) {
+    console.error('[admin] Error fetching public settings:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// All other admin routes require authentication and admin access
 router.use(authMiddleware);
 router.use(adminAuthMiddleware);
 
@@ -145,7 +182,13 @@ router.get('/images', async (req: AuthenticatedRequest, res: Response) => {
     const imagesWithUrls = images.map(path => {
       // Ensure path doesn't have double slashes
       const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-      const { data } = supabase!.storage.from('site-assets').getPublicUrl(cleanPath);
+      // Remove any leading slashes and ensure proper format
+      const normalizedPath = cleanPath.replace(/^\/+/, '');
+      const { data } = supabase!.storage.from('site-assets').getPublicUrl(normalizedPath);
+      
+      // Log for debugging
+      console.log(`[admin] Image path: ${path} -> normalized: ${normalizedPath} -> URL: ${data.publicUrl}`);
+      
       return {
         path,
         url: data.publicUrl,

@@ -68,8 +68,8 @@ export default function Home() {
 
   const loadSiteSettings = async () => {
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${apiBaseUrl}/api/admin/settings`);
+      // Use relative URL for NGINX proxy
+      const response = await fetch('/api/admin/settings/public');
       
       if (response.ok) {
         const settings = await response.json();
@@ -77,6 +77,7 @@ export default function Home() {
       }
     } catch (error) {
       // Use defaults if settings fail to load
+      console.error('Error loading site settings:', error);
     }
   };
 
