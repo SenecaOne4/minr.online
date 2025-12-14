@@ -97,6 +97,10 @@ app.get('/api/version', (req, res) => {
 app.use('/api/profile', profileRoutes);
 app.use('/api/membership', membershipRoutes);
 
+// Public routes (no auth required)
+import publicSettingsRoutes from './routes/publicSettings';
+app.use('/api/admin/settings/public', publicSettingsRoutes);
+
 // Optional routes
 if (paymentRoutes) {
   app.use('/api/payments', paymentRoutes);
