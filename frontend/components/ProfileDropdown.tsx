@@ -148,6 +148,7 @@ export default function ProfileDropdown({ userEmail, onLogout }: ProfileDropdown
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
                   placeholder="Enter new password"
                   required
@@ -162,6 +163,7 @@ export default function ProfileDropdown({ userEmail, onLogout }: ProfileDropdown
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
                   placeholder="Confirm new password"
                   required

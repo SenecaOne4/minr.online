@@ -128,8 +128,11 @@ export default function MinerPage() {
         addLog('error', `Worker error: ${errorMsg}`);
       };
 
-      // Cleanup on unmount
+      // Cleanup on unmount - warn user if mining is active
       return () => {
+        if (isMining) {
+          console.warn('Mining was active when navigating away. Connection closed.');
+        }
         if (workerRef.current) {
           workerRef.current.terminate();
           workerRef.current = null;
