@@ -49,6 +49,7 @@ export default function MinerPage() {
   const [hashesPerSecond, setHashesPerSecond] = useState(0);
   const [totalHashes, setTotalHashes] = useState(0);
   const [realShares, setRealShares] = useState(0);
+  const [rejectedShares, setRejectedShares] = useState(0);
   const [lastSubmitResult, setLastSubmitResult] = useState<string | null>(null);
   const [lastSubmitTime, setLastSubmitTime] = useState<number | null>(null);
   const [miningStartTime, setMiningStartTime] = useState<number | null>(null);
@@ -76,6 +77,13 @@ export default function MinerPage() {
     };
     setLogs((prev) => [...prev, entry]);
   };
+
+  // Auto-scroll log container to bottom when logs change
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   // Initialize Web Worker immediately on page load
   useEffect(() => {
@@ -343,6 +351,7 @@ export default function MinerPage() {
             } else {
               const errorMsg = parsed.error || 'Unknown error';
               addLog('error', `❌ Pool responded: Share rejected: ${errorMsg} (ID: ${parsed.id})`);
+              setRejectedShares((prev) => prev + 1);
               setLastSubmitResult(`❌ Rejected: ${errorMsg}`);
             }
           }
@@ -446,6 +455,7 @@ export default function MinerPage() {
     setIsMining(true);
     setMiningStartTime(Date.now());
     setRealShares(0);
+    setRejectedShares(0);
     setLastSubmitResult(null);
     addLog('info', `✅ Mining started (difficulty: ${difficulty || 'unknown'}, stride: ${nonceStride})`);
   };
@@ -545,10 +555,24 @@ export default function MinerPage() {
           }
           
           // Load admin wallet from settings (public endpoint)
-          const settingsRes = await fetch('/api/admin/settings/public');
-          if (settingsRes.ok) {
-            const settingsData = await settingsRes.json();
-            setAdminWallet(settingsData.admin_btc_wallet || '');
+          try {
+            const settingsRes = await fetch('/api/admin/settings/public');
+            if (settingsRes.ok) {
+              const settingsData = await settingsRes.json();
+              if (settingsData.admin_btc_wallet) {
+                setAdminWallet(settingsData.admin_btc_wallet);
+              } else {
+                // Fallback to default wallet if not set
+                setAdminWallet('bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47');
+              }
+            } else {
+              // Fallback if API fails
+              setAdminWallet('bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47');
+            }
+          } catch (error) {
+            console.error('Error loading admin wallet:', error);
+            // Fallback if fetch fails
+            setAdminWallet('bc1qchm0vkcdkzrstlh05w5zd7j5788yysyfmnlf47');
           }
           
           setLoading(false);
@@ -628,7 +652,7 @@ export default function MinerPage() {
           <MiningMetrics
             currentHashrate={hashesPerSecond}
             sharesAccepted={realShares}
-            sharesRejected={0}
+            sharesRejected={rejectedShares}
             connectionStatus={connectionStatus}
           />
         </div>
@@ -913,7 +937,7 @@ export default function MinerPage() {
           <div className="lg:col-span-1">
             <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl p-6 shadow-2xl h-[600px] flex flex-col">
               <h2 className="text-2xl font-semibold mb-4 text-white">Stratum Log</h2>
-              <div className="flex-1 overflow-y-auto font-mono text-xs space-y-1">
+              <div ref={logContainerRef} className="flex-1 overflow-y-auto font-mono text-xs space-y-1">
                 {logs.length === 0 ? (
                   <p className="text-gray-500">No messages yet...</p>
                 ) : (
