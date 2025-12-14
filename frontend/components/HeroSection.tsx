@@ -64,18 +64,24 @@ export default function HeroSection({ settings }: HeroSectionProps) {
     if (usePassword && password) {
       // Password login
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: email.trim(),
+        password: password,
       });
 
       if (error) {
         // More detailed error handling
-        if (error.message.includes('Invalid login credentials') || error.message.includes('Invalid')) {
-          setMessage('Error: Invalid email or password. Make sure you have set a password in your profile.');
-        } else if (error.message.includes('Email not confirmed')) {
-          setMessage('Error: Please confirm your email first. Check your inbox for a confirmation link.');
+        const errorMsg = error.message.toLowerCase();
+        
+        if (errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid') || errorMsg.includes('email')) {
+          setMessage('Error: Invalid email or password. If you haven\'t set a password yet, please use "Magic Link" login first, then set a password in your profile settings.');
+        } else if (errorMsg.includes('email not confirmed') || errorMsg.includes('not confirmed')) {
+          setMessage('Error: Please confirm your email first. Check your inbox for a confirmation link, or use Magic Link login.');
+        } else if (errorMsg.includes('user not found')) {
+          setMessage('Error: No account found with this email. Please sign up first using Magic Link login.');
+        } else if (errorMsg.includes('password')) {
+          setMessage('Error: Password authentication failed. Make sure you have set a password in your profile settings, or use Magic Link login.');
         } else {
-          setMessage(`Error: ${error.message}`);
+          setMessage(`Error: ${error.message}. Try using Magic Link login instead.`);
         }
         setLoading(false);
         return;
@@ -83,7 +89,11 @@ export default function HeroSection({ settings }: HeroSectionProps) {
       
       if (data?.session) {
         // Success - page will redirect automatically
-        window.location.href = '/';
+        setMessage('Login successful! Redirecting...');
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 500);
+        return;
       }
     } else {
       // Magic link login
@@ -140,6 +150,18 @@ export default function HeroSection({ settings }: HeroSectionProps) {
         {/* Login Form */}
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-3xl p-8 shadow-2xl max-w-md mx-auto">
           <form onSubmit={handleLogin} className="space-y-6">
+            {/* Hidden username field for accessibility (email serves as username) */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={email}
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ position: 'absolute', left: '-9999px' }}
+            />
+            
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
                 Email Address
@@ -147,9 +169,11 @@ export default function HeroSection({ settings }: HeroSectionProps) {
               <input
                 id="email"
                 type="email"
+                name="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm transition-all duration-200"
                 placeholder="your@email.com"
               />
@@ -163,10 +187,11 @@ export default function HeroSection({ settings }: HeroSectionProps) {
                 <input
                   id="password"
                   type="password"
+                  name="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required={usePassword}
-                  autoComplete={usePassword ? "current-password" : "new-password"}
+                  autoComplete="current-password"
                   className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm transition-all duration-200"
                   placeholder="Enter your password"
                 />
