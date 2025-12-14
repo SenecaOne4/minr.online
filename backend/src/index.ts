@@ -112,6 +112,10 @@ app.use('/api/admin/settings/public', publicSettingsRoutes);
 import minerConfigRoutes from './routes/miner-config';
 app.use('/api/miner-config', minerConfigRoutes);
 
+// CPU miner launcher route (requires auth)
+import cpuMinerLauncherRoutes from './routes/cpu-miner-launcher';
+app.use('/api/cpu-miner-launcher', cpuMinerLauncherRoutes);
+
 // Optional routes
 if (paymentRoutes) {
   app.use('/api/payments', paymentRoutes);
