@@ -497,15 +497,12 @@ function generateLauncherHTML(config: {
     }
     
     function stopMining() {
-      document.getElementById('mineBtn').disabled = false;
-      document.getElementById('stopBtn').disabled = true;
-      updateStatus('Stopping miner...', 'warning');
-      addLog('info', 'Stopping cpuminer...');
-      
-      // Stop mining process
-      if (statusCheckInterval) {
-        clearInterval(statusCheckInterval);
+      const instructionsDiv = document.getElementById('miningInstructions');
+      if (instructionsDiv) {
+        instructionsDiv.classList.add('hidden');
       }
+      updateStatus('Mining instructions hidden.', 'info');
+      addLog('info', 'To stop mining, press Ctrl+C in the terminal where cpuminer is running.');
     }
     
     function startMiningStatsPolling() {
