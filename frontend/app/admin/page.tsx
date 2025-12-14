@@ -196,17 +196,27 @@ export default function AdminPage() {
           // Token might be expired, try to refresh
           const { data: { session: newSession } } = await supabase.auth.refreshSession();
           if (newSession?.access_token) {
-            // Retry with new token
-            const retryResponse = await fetch(`${apiBaseUrl}/api/admin/settings`, {
+            // Retry with new token using same URL logic
+            const retryUrl = apiBaseUrl ? `${apiBaseUrl}/api/admin/settings` : '/api/admin/settings';
+            const retryResponse = await fetch(retryUrl, {
               headers: {
                 Authorization: `Bearer ${newSession.access_token}`,
                 'Content-Type': 'application/json',
               },
+              credentials: 'include',
             });
             if (retryResponse.ok) {
               const data = await retryResponse.json();
               setSettings(data);
+            } else {
+              // If still 401, user might not be admin - redirect to home
+              console.error('[admin] Still unauthorized after token refresh');
+              window.location.href = '/';
             }
+          } else {
+            // No session after refresh - redirect to login
+            console.error('[admin] No session after refresh');
+            window.location.href = '/';
           }
         }
         return;
