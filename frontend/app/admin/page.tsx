@@ -177,12 +177,16 @@ export default function AdminPage() {
         return;
       }
 
+      // Use absolute URL if NEXT_PUBLIC_API_URL is set, otherwise use relative
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${apiBaseUrl}/api/admin/settings`, {
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/admin/settings` : '/api/admin/settings';
+      
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies for CORS
       });
 
       if (!response.ok) {
