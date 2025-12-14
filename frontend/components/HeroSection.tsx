@@ -63,25 +63,44 @@ export default function HeroSection({ settings }: HeroSectionProps) {
     
     if (usePassword && password) {
       // Password login
+      const trimmedEmail = email.trim();
+      
+      if (!trimmedEmail) {
+        setMessage('Error: Please enter your email address.');
+        setLoading(false);
+        return;
+      }
+      
+      if (!password) {
+        setMessage('Error: Please enter your password.');
+        setLoading(false);
+        return;
+      }
+      
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: trimmedEmail,
         password: password,
       });
 
       if (error) {
+        // Log the full error for debugging
+        console.error('Password login error:', error);
+        
         // More detailed error handling
         const errorMsg = error.message.toLowerCase();
+        const errorCode = error.status || error.code || '';
         
-        if (errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid') || errorMsg.includes('email')) {
+        // Handle specific Supabase error codes
+        if (errorCode === 400 || errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid') || errorMsg.includes('email')) {
           setMessage('Error: Invalid email or password. If you haven\'t set a password yet, please use "Magic Link" login first, then set a password in your profile settings.');
-        } else if (errorMsg.includes('email not confirmed') || errorMsg.includes('not confirmed')) {
+        } else if (errorMsg.includes('email not confirmed') || errorMsg.includes('not confirmed') || errorCode === 'email_not_confirmed') {
           setMessage('Error: Please confirm your email first. Check your inbox for a confirmation link, or use Magic Link login.');
-        } else if (errorMsg.includes('user not found')) {
+        } else if (errorMsg.includes('user not found') || errorCode === 'user_not_found') {
           setMessage('Error: No account found with this email. Please sign up first using Magic Link login.');
-        } else if (errorMsg.includes('password')) {
+        } else if (errorMsg.includes('password') || errorCode === 'invalid_credentials') {
           setMessage('Error: Password authentication failed. Make sure you have set a password in your profile settings, or use Magic Link login.');
         } else {
-          setMessage(`Error: ${error.message}. Try using Magic Link login instead.`);
+          setMessage(`Error: ${error.message || 'Authentication failed'}. Try using Magic Link login instead.`);
         }
         setLoading(false);
         return;
@@ -159,7 +178,7 @@ export default function HeroSection({ settings }: HeroSectionProps) {
               readOnly
               tabIndex={-1}
               aria-hidden="true"
-              style={{ position: 'absolute', left: '-9999px' }}
+              style={{ display: 'none' }}
             />
             
             <div>
