@@ -126,6 +126,85 @@ export default function MinersPage() {
           </div>
         )}
 
+        {/* Standalone HTML Miner Section */}
+        {hasAccess && profile?.btc_payout_address && (
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-green-500/10 to-white/10 border border-white/20 rounded-2xl p-8 mb-8 shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-green-500/30 rounded-xl flex items-center justify-center">
+                <span className="text-2xl">🌐</span>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">Standalone Desktop Miner</h2>
+                <p className="text-gray-400 text-sm">Download a single HTML file that runs in your browser</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-gray-300">
+                Download a personalized HTML file that contains everything needed to mine. Just open it in your browser and click "Start Mining". 
+                It's pre-configured with your BTC wallet address and connects automatically to our mining pool.
+              </p>
+              
+              <a
+                href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/standalone-miner`}
+                download="minr-desktop-miner.html"
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+                onClick={async (e) => {
+                  // Fetch with auth token
+                  if (!user) return;
+                  const { data: { session } } = await supabase!.auth.getSession();
+                  if (!session) {
+                    e.preventDefault();
+                    alert('Please log in to download the miner');
+                    return;
+                  }
+                  
+                  e.preventDefault();
+                  try {
+                    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+                    const response = await fetch(`${apiBaseUrl}/api/standalone-miner`, {
+                      headers: {
+                        Authorization: `Bearer ${session.access_token}`,
+                      },
+                    });
+                    
+                    if (!response.ok) {
+                      const error = await response.json();
+                      alert(`Error: ${error.error || 'Failed to download miner'}`);
+                      return;
+                    }
+                    
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `minr-desktop-miner-${Date.now()}.html`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                  } catch (error: any) {
+                    alert(`Error downloading miner: ${error.message}`);
+                  }
+                }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download Standalone HTML Miner
+              </a>
+              
+              <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
+                <p className="text-sm text-gray-400">
+                  <strong className="text-white">How it works:</strong> The downloaded HTML file contains all the mining code embedded. 
+                  Simply open it in any modern web browser (Chrome, Firefox, Edge, Safari) and click "Start Mining". 
+                  No installation or setup required - it connects directly to our mining pool using your configured wallet address.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* CPU Miner Section */}
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-8 mb-8 shadow-2xl">
           <div className="flex items-center gap-3 mb-6">

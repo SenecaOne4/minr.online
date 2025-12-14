@@ -38,6 +38,13 @@ try {
   console.log('[server] Miner download routes not available');
 }
 
+let standaloneMinerRoutes: express.Router | null = null;
+try {
+  standaloneMinerRoutes = require('./routes/standalone-miner').default;
+} catch (e) {
+  console.log('[server] Standalone miner routes not available');
+}
+
 // Optional services
 let startPaymentVerifier: (() => void) | null = null;
 let stopPaymentVerifier: (() => void) | null = null;
@@ -113,6 +120,9 @@ if (analyticsRoutes) {
 }
 if (minerDownloadRoutes) {
   app.use('/api/miner-download', minerDownloadRoutes);
+}
+if (standaloneMinerRoutes) {
+  app.use('/api/standalone-miner', standaloneMinerRoutes);
 }
 
 // Create HTTP server from Express app
