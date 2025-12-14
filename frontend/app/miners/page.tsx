@@ -126,16 +126,16 @@ export default function MinersPage() {
           </div>
         )}
 
-        {/* Standalone HTML Miner Section */}
+        {/* Desktop Miner Download Section */}
         {hasAccess && profile?.btc_payout_address && (
-          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-green-500/10 to-white/10 border border-white/20 rounded-2xl p-8 mb-8 shadow-2xl">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-8 mb-8 shadow-2xl">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-green-500/30 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">🌐</span>
+              <div className="w-12 h-12 bg-blue-500/30 rounded-xl flex items-center justify-center">
+                <span className="text-2xl">💻</span>
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-white">Standalone Desktop Miner</h2>
-                <p className="text-gray-400 text-sm">Download a single HTML file that runs in your browser</p>
+                <h2 className="text-2xl font-bold text-white">Desktop Miner</h2>
+                <p className="text-gray-400 text-sm">Download a standalone HTML file that runs in your browser</p>
               </div>
             </div>
 
@@ -148,7 +148,7 @@ export default function MinersPage() {
               <a
                 href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/standalone-miner`}
                 download="minr-desktop-miner.html"
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl"
                 onClick={async (e) => {
                   // Fetch with auth token
                   if (!user) return;
@@ -191,7 +191,7 @@ export default function MinersPage() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Download Standalone HTML Miner
+                Download Desktop Miner
               </a>
               
               <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
@@ -204,57 +204,6 @@ export default function MinersPage() {
             </div>
           </div>
         )}
-
-        {/* CPU Miner Section */}
-        <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-8 mb-8 shadow-2xl">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-blue-500/30 rounded-xl flex items-center justify-center">
-              <span className="text-2xl">💻</span>
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">CPU Miner (cpuminer)</h2>
-              <p className="text-gray-400 text-sm">Mine with your computer's CPU</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">1. Download cpuminer</h3>
-              <p className="text-gray-300 mb-3">
-                Download cpuminer from the official repository:
-              </p>
-              <a
-                href="https://github.com/pooler/cpuminer"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block text-blue-400 hover:text-blue-300 underline"
-              >
-                https://github.com/pooler/cpuminer
-              </a>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">2. Configure and Run</h3>
-              <p className="text-gray-300 mb-3">
-                Use the following command with your Bitcoin address:
-              </p>
-              <div className="relative">
-                <pre className="bg-black/50 border border-white/20 rounded-lg p-4 text-green-400 font-mono text-sm overflow-x-auto">
-                  <code>{`./cpuminer -a sha256d \\
-  -o ${STRATUM_ENDPOINT} \\
-  -u ${BTC_ADDRESS} \\
-  -p x`}</code>
-                </pre>
-                <button
-                  onClick={() => copyToClipboard(`./cpuminer -a sha256d -o ${STRATUM_ENDPOINT} -u ${BTC_ADDRESS} -p x`, 'cpuminer')}
-                  className="absolute top-2 right-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors"
-                >
-                  {copied === 'cpuminer' ? '✓ Copied' : 'Copy'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* ASIC Miner Section */}
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-purple-500/10 to-white/10 border border-white/20 rounded-2xl p-8 mb-8 shadow-2xl">
