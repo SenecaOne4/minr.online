@@ -14,12 +14,16 @@ export async function adminAuthMiddleware(
   next: NextFunction
 ): Promise<void> {
   if (!req.user) {
+    console.error('[adminAuth] No user in request');
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
+  console.log('[adminAuth] Checking admin access for user:', req.user.email, req.user.id);
+
   // Check if user email matches admin email (legacy support)
   if (req.user.email === ADMIN_EMAIL) {
+    console.log('[adminAuth] User authorized via email match');
     next();
     return;
   }
@@ -33,15 +37,23 @@ export async function adminAuthMiddleware(
         .eq('id', req.user.id)
         .single();
 
-      if (!error && data?.is_admin) {
+      if (error) {
+        console.error('[adminAuth] Error fetching profile:', error);
+      } else if (data?.is_admin) {
+        console.log('[adminAuth] User authorized via is_admin flag');
         next();
         return;
+      } else {
+        console.log('[adminAuth] User does not have is_admin flag:', data);
       }
     } catch (error) {
       console.error('[adminAuth] Error checking admin status:', error);
     }
+  } else {
+    console.error('[adminAuth] Supabase not configured');
   }
 
+  console.error('[adminAuth] Access denied for user:', req.user.email);
   res.status(403).json({ error: 'Forbidden: Admin access required' });
 }
 

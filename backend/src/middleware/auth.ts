@@ -31,7 +31,13 @@ export async function authMiddleware(
       error,
     } = await supabase.auth.getUser(token);
 
-    if (error || !user) {
+    if (error) {
+      console.error('[auth] Token validation error:', error.message);
+      return res.status(401).json({ error: 'Invalid token', details: error.message });
+    }
+
+    if (!user) {
+      console.error('[auth] No user returned from token validation');
       return res.status(401).json({ error: 'Invalid token' });
     }
 
@@ -40,9 +46,11 @@ export async function authMiddleware(
       email: user.email,
     };
 
+    console.log('[auth] User authenticated:', user.email, user.id);
     next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Authentication failed' });
+  } catch (error: any) {
+    console.error('[auth] Authentication exception:', error);
+    return res.status(401).json({ error: 'Authentication failed', details: error?.message });
   }
 }
 
