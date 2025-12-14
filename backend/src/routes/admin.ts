@@ -143,7 +143,9 @@ router.get('/images', async (req: AuthenticatedRequest, res: Response) => {
 
     // Get public URLs for each image
     const imagesWithUrls = images.map(path => {
-      const { data } = supabase!.storage.from('site-assets').getPublicUrl(path);
+      // Ensure path doesn't have double slashes
+      const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+      const { data } = supabase!.storage.from('site-assets').getPublicUrl(cleanPath);
       return {
         path,
         url: data.publicUrl,

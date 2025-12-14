@@ -113,6 +113,19 @@ export default function ImageLibrary({ folder, onSelect, selectedPath }: ImageLi
             src={image.url}
             alt={image.path}
             className="w-full h-32 object-cover"
+            onError={(e) => {
+              // Fallback if image fails to load
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const parent = target.parentElement;
+              if (parent) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'w-full h-32 bg-gray-700 flex items-center justify-center text-gray-400 text-xs';
+                placeholder.textContent = 'Image not found';
+                parent.appendChild(placeholder);
+              }
+            }}
+            loading="lazy"
           />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all duration-200 flex items-center justify-center gap-2">
             {onSelect && (

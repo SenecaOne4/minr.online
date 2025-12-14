@@ -378,7 +378,15 @@ export default function AdminPage() {
                 </div>
                 {settings?.favicon_url && (
                   <div className="mt-4 flex items-center gap-4">
-                    <img src={settings.favicon_url} alt="Favicon" className="w-16 h-16 rounded-lg border-2 border-white/20" />
+                    <img 
+                      src={settings.favicon_url} 
+                      alt="Favicon" 
+                      className="w-16 h-16 rounded-lg border-2 border-white/20 object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23999" width="64" height="64"/%3E%3Ctext fill="%23fff" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-size="10"%3EImage%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
                     <button
                       onClick={() => setSettings({ ...settings, favicon_url: undefined } as SiteSettings)}
                       className="text-red-400 hover:text-red-300 text-sm transition-colors"
