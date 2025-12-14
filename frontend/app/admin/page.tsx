@@ -30,8 +30,9 @@ export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    if (supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+    const checkAdminAndLoad = async () => {
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setUser(session.user);
           // Check if admin - also check profile for is_admin flag
@@ -65,10 +66,12 @@ export default function AdminPage() {
           window.location.href = '/';
         }
         setLoading(false);
-      });
-    } else {
-      setLoading(false);
-    }
+      } else {
+        setLoading(false);
+      }
+    };
+    
+    checkAdminAndLoad();
   }, []);
 
   const loadUsers = async () => {
