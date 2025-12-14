@@ -8,7 +8,9 @@ cd /var/www/minr-online/frontend
 echo "=== Fixing Frontend Chunk Loading ==="
 echo "1. Stopping Next.js..."
 pkill -9 -f "next start" || true
-sleep 2
+pkill -9 -f "node.*3001" || true
+fuser -k 3001/tcp 2>/dev/null || true
+sleep 3
 
 echo "2. Removing stale build..."
 rm -rf .next
