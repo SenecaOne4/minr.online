@@ -66,6 +66,7 @@ export default function MinerPage() {
   const [workerState, setWorkerState] = useState<WorkerState>('starting');
   const [workerError, setWorkerError] = useState<string | null>(null);
   const logIdRef = useRef(0);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Helper to add log entries
   const addLog = (type: LogEntry['type'], message: string) => {
