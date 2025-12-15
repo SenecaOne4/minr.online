@@ -16,15 +16,31 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     const userId = req.user!.id;
     const userEmail = req.user!.email || '';
 
-    // Check if user has paid entry fee or is exempt
-    const { data: profile } = await supabase!
+    // Get or create profile (auto-create if doesn't exist)
+    let { data: profile, error: profileError } = await supabase!
       .from('profiles')
       .select('has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
       .eq('id', userId)
       .single();
 
-    if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
+    // If profile doesn't exist, create it
+    if (!profile || profileError) {
+      const { data: newProfile, error: createError } = await supabase!
+        .from('profiles')
+        .insert({
+          id: userId,
+          username: null,
+          btc_payout_address: null,
+        })
+        .select('has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
+        .single();
+
+      if (createError || !newProfile) {
+        console.error('[cpu-miner-launcher] Error creating profile:', createError);
+        return res.status(500).json({ error: 'Failed to create profile' });
+      }
+
+      profile = newProfile;
     }
 
     // Admins are automatically exempt
