@@ -257,7 +257,10 @@ export default function AdminPage() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSaveSettings = async (settingsToSave?: SiteSettings | null) => {
+    const settingsToUse = settingsToSave || settings;
+    if (!settingsToUse) return;
+
     setSaving(true);
     setMessage(null);
 
@@ -267,6 +270,15 @@ export default function AdminPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
+      // Convert undefined to null for proper JSON serialization
+      const cleanedSettings = {
+        ...settingsToUse,
+        favicon_url: settingsToUse.favicon_url || null,
+        logo_url: settingsToUse.logo_url || null,
+        og_image_url: settingsToUse.og_image_url || null,
+        hero_image_url: settingsToUse.hero_image_url || null,
+      };
+
       // Use relative URL for NGINX proxy
       const response = await fetch('/api/admin/settings', {
         method: 'POST',
@@ -274,10 +286,12 @@ export default function AdminPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(cleanedSettings),
       });
 
       if (response.ok) {
+        const savedData = await response.json();
+        setSettings(savedData);
         setMessage('Settings saved successfully!');
         setTimeout(() => setMessage(null), 3000);
       } else {
@@ -289,6 +303,10 @@ export default function AdminPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = async () => {
+    await handleSaveSettings();
   };
 
   if (loading) {
@@ -407,7 +425,12 @@ export default function AdminPage() {
                         Copy URL
                       </button>
                       <button
-                        onClick={() => setSettings({ ...settings, favicon_url: undefined } as SiteSettings)}
+                        onClick={async () => {
+                          const updatedSettings = { ...settings, favicon_url: null } as SiteSettings;
+                          setSettings(updatedSettings);
+                          // Auto-save the removal
+                          await handleSaveSettings(updatedSettings);
+                        }}
                         className="text-red-400 hover:text-red-300 text-sm transition-colors"
                       >
                         Remove
@@ -463,7 +486,11 @@ export default function AdminPage() {
                         Copy URL
                       </button>
                       <button
-                        onClick={() => setSettings({ ...settings, logo_url: undefined } as SiteSettings)}
+                        onClick={async () => {
+                          const updatedSettings = { ...settings, logo_url: null } as SiteSettings;
+                          setSettings(updatedSettings);
+                          await handleSaveSettings(updatedSettings);
+                        }}
                         className="text-red-400 hover:text-red-300 text-sm transition-colors"
                       >
                         Remove
@@ -519,7 +546,11 @@ export default function AdminPage() {
                         Copy URL
                       </button>
                       <button
-                        onClick={() => setSettings({ ...settings, og_image_url: undefined } as SiteSettings)}
+                        onClick={async () => {
+                          const updatedSettings = { ...settings, og_image_url: null } as SiteSettings;
+                          setSettings(updatedSettings);
+                          await handleSaveSettings(updatedSettings);
+                        }}
                         className="text-red-400 hover:text-red-300 text-sm transition-colors"
                       >
                         Remove
@@ -696,7 +727,11 @@ export default function AdminPage() {
                         Copy URL
                       </button>
                       <button
-                        onClick={() => setSettings({ ...settings, hero_image_url: undefined } as SiteSettings)}
+                        onClick={async () => {
+                          const updatedSettings = { ...settings, hero_image_url: null } as SiteSettings;
+                          setSettings(updatedSettings);
+                          await handleSaveSettings(updatedSettings);
+                        }}
                         className="text-red-400 hover:text-red-300 text-sm transition-colors"
                       >
                         Remove

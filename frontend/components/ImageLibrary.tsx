@@ -114,22 +114,40 @@ export default function ImageLibrary({ folder, onSelect, selectedPath }: ImageLi
             alt={image.path}
             className="w-full h-32 object-cover"
             title={`URL: ${image.url}`}
+            crossOrigin="anonymous"
             onError={(e) => {
               // Fallback if image fails to load
               const target = e.target as HTMLImageElement;
               console.error(`[ImageLibrary] Failed to load image:`, {
                 url: image.url,
                 path: image.path,
-                error: 'Image load failed'
+                error: 'Image load failed - check CORS and file existence'
               });
+              
+              // Try to fetch the image directly to see the actual error
+              fetch(image.url, { method: 'HEAD', mode: 'no-cors' })
+                .then(() => {
+                  console.log(`[ImageLibrary] Image URL is accessible (HEAD request succeeded)`);
+                })
+                .catch((fetchError) => {
+                  console.error(`[ImageLibrary] Image URL fetch error:`, fetchError);
+                });
+              
               target.style.display = 'none';
               const parent = target.parentElement;
               if (parent) {
+                // Remove any existing placeholder
+                const existingPlaceholder = parent.querySelector('.image-placeholder');
+                if (existingPlaceholder) {
+                  existingPlaceholder.remove();
+                }
+                
                 const placeholder = document.createElement('div');
-                placeholder.className = 'w-full h-32 bg-gray-700 flex flex-col items-center justify-center text-gray-400 text-xs p-2';
+                placeholder.className = 'image-placeholder w-full h-32 bg-gray-700 flex flex-col items-center justify-center text-gray-400 text-xs p-2';
                 placeholder.innerHTML = `
                   <div>Image not found</div>
-                  <div class="text-[10px] break-all mt-1">${image.url.substring(0, 50)}...</div>
+                  <div class="text-[10px] break-all mt-1 opacity-75">${image.url.substring(0, 60)}...</div>
+                  <a href="${image.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 text-[10px] mt-1 hover:underline">Open URL</a>
                 `;
                 parent.appendChild(placeholder);
               }

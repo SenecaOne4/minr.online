@@ -61,24 +61,26 @@ router.post('/settings', async (req: AuthenticatedRequest, res: Response) => {
       navigation_items,
     } = req.body;
 
+    // Ensure null values are properly set (not undefined)
+    const updateData: any = {
+      id: SETTINGS_ID,
+      admin_btc_wallet: admin_btc_wallet || null,
+      favicon_url: favicon_url || null,
+      logo_url: logo_url || null,
+      og_image_url: og_image_url || null,
+      hero_title: hero_title || null,
+      hero_subtitle: hero_subtitle || null,
+      hero_image_url: hero_image_url || null,
+      navigation_items: navigation_items ? JSON.parse(JSON.stringify(navigation_items)) : null,
+      updated_at: new Date().toISOString(),
+      updated_by: userId,
+    };
+
+    console.log('[admin] Saving settings:', JSON.stringify(updateData, null, 2));
+
     const { data, error } = await supabase!
       .from('site_settings')
-      .upsert(
-        {
-          id: SETTINGS_ID,
-          admin_btc_wallet,
-          favicon_url,
-          logo_url,
-          og_image_url,
-          hero_title,
-          hero_subtitle,
-          hero_image_url,
-          navigation_items: navigation_items ? JSON.parse(JSON.stringify(navigation_items)) : null,
-          updated_at: new Date().toISOString(),
-          updated_by: userId,
-        },
-        { onConflict: 'id' }
-      )
+      .upsert(updateData, { onConflict: 'id' })
       .select()
       .single();
 
