@@ -805,7 +805,7 @@ update_status "installing" "Installing dependencies..." 30
 
 # Install dependencies
 log "Installing build dependencies..."
-brew install automake autoconf pkg-config libcurl openssl jansson gmp || {
+brew install automake autoconf pkg-config curl openssl jansson gmp || {
     log "Error installing dependencies"
     update_status "error" "Failed to install dependencies" 0
     exit 1
