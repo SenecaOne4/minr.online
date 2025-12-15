@@ -527,40 +527,9 @@ fi\`;
           document.body.removeChild(launcherLink);
           
           addLog('success', 'Scripts downloaded!');
-          addLog('info', 'Creating auto-launcher...');
-          
-          // Create an AppleScript that finds launch-install.sh in the same directory as the AppleScript file
-          setTimeout(() => {
-            const appleScriptContent = \`-- Auto-launcher for Minr.online CPU Miner
--- This script finds launch-install.sh in the same directory and runs it
-tell application "Finder"
-    set scriptPath to path to me
-    set scriptDir to container of scriptPath
-    set launcherPath to (scriptDir as string) & "launch-install.sh"
-    set launcherPosixPath to POSIX path of launcherPath
-    set scriptDirPosix to POSIX path of (scriptDir as alias)
-end tell
-
-tell application "Terminal"
-    activate
-    do shell script "chmod +x " & quoted form of launcherPosixPath
-    set shellCmd to "cd " & quoted form of scriptDirPosix & " && /bin/bash " & quoted form of launcherPosixPath
-    do script shellCmd
-end tell\`;
-            
-            const appleScriptBlob = new Blob([appleScriptContent], { type: 'text/plain' });
-            const appleScriptUrl = URL.createObjectURL(appleScriptBlob);
-            const appleScriptLink = document.createElement('a');
-            appleScriptLink.href = appleScriptUrl;
-            appleScriptLink.download = 'open-terminal.applescript';
-            document.body.appendChild(appleScriptLink);
-            appleScriptLink.click();
-            document.body.removeChild(appleScriptLink);
-            
-            addLog('info', 'All files downloaded! Double-click "open-terminal.applescript" to start!');
-            addLog('info', 'Make sure all files (HTML, .sh, .applescript) are in the same folder!');
-            updateStatus('Double-click open-terminal.applescript to start!', 'success');
-          }, 1000);
+          addLog('info', 'Double-click "launch-install.sh" to start installation!');
+          addLog('info', 'Or run: ./launch-install.sh from Terminal');
+          updateStatus('Scripts ready! Double-click launch-install.sh to start!', 'success');
           
           updateProgress(50);
           startStatusPolling();
