@@ -357,7 +357,7 @@ function generateLauncherHTML(config: {
       </div>
       
       <button id="installBtn" class="btn-primary" onclick="startInstallation()">
-        Download Install Script
+        🚀 Start Installation (Auto-Run)
       </button>
       
       <button id="mineBtn" class="btn-secondary hidden" onclick="startMining()">
@@ -444,55 +444,140 @@ function generateLauncherHTML(config: {
           throw new Error(error.error || 'Failed to download install script');
         }
         
-        if (!scriptResponse.ok) {
-          throw new Error('Failed to download install script');
-        }
+        const scriptText = await scriptResponse.text();
+        const scriptBlob = new Blob([scriptText], { type: platform === 'windows' ? 'application/x-powershell' : 'application/x-sh' });
         
-        const scriptBlob = await scriptResponse.blob();
-        const scriptUrl_local = URL.createObjectURL(scriptBlob);
+        // Get the current file location (where this HTML file is)
+        const htmlFilePath = window.location.pathname;
+        const htmlFileDir = htmlFilePath.substring(0, htmlFilePath.lastIndexOf('/')) || '.';
         
-        // For Mac/Linux: Download and provide instructions
-        if (platform === 'mac' || platform === 'linux') {
-          addLog('info', 'Downloading install script...');
+        // Create platform-specific launcher that opens terminal and runs the script
+        if (platform === 'mac') {
+          addLog('info', 'Creating Mac launcher...');
           
-          // Create download link
-          const a = document.createElement('a');
-          a.href = scriptUrl_local;
-          a.download = 'install-minr-miner.sh';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
+          // Download the install script first
+          const scriptUrl_local = URL.createObjectURL(scriptBlob);
+          const scriptLink = document.createElement('a');
+          scriptLink.href = scriptUrl_local;
+          scriptLink.download = 'install-minr-miner.sh';
+          document.body.appendChild(scriptLink);
+          scriptLink.click();
+          document.body.removeChild(scriptLink);
           
-          addLog('success', 'Script downloaded!');
-          addLog('info', 'To install, open Terminal and run:');
-          addLog('info', '  chmod +x ~/Downloads/install-minr-miner.sh');
-          addLog('info', '  ~/Downloads/install-minr-miner.sh');
-          addLog('info', 'Or drag the file into Terminal and press Enter');
+          // Create a shell script launcher that opens Terminal
+          const launcherScript = \`#!/bin/bash
+# Get the directory where this script is located
+SCRIPT_DIR="\\$(cd "\\$(dirname "\\$0")" && pwd)"
+cd "\\$SCRIPT_DIR"
+
+# Open Terminal and run the install script
+osascript <<EOF
+tell application "Terminal"
+    activate
+    set currentTab to do script "cd \\"\\$SCRIPT_DIR\\" && chmod +x install-minr-miner.sh && ./install-minr-miner.sh"
+end tell
+EOF\`;
           
-          updateStatus('Script downloaded. Run it in Terminal to install.', 'warning');
-          updateProgress(30);
+          const launcherBlob = new Blob([launcherScript], { type: 'application/x-sh' });
+          const launcherUrl = URL.createObjectURL(launcherBlob);
+          const launcherLink = document.createElement('a');
+          launcherLink.href = launcherUrl;
+          launcherLink.download = 'launch-install.sh';
+          document.body.appendChild(launcherLink);
+          launcherLink.click();
+          document.body.removeChild(launcherLink);
           
-          // Start polling for status file (will check ~/.minr-online/status.json)
+          addLog('success', 'Scripts downloaded!');
+          addLog('info', 'Opening Terminal automatically...');
+          
+          // Try to auto-execute the launcher (works if file is opened locally)
+          setTimeout(() => {
+            // Create an AppleScript file that can be double-clicked
+            const appleScriptContent = \`tell application "Terminal"
+    activate
+    set currentTab to do script "cd \\"\\$HOME/Downloads\\" && chmod +x launch-install.sh && ./launch-install.sh"
+end tell\`;
+            
+            const appleScriptBlob = new Blob([appleScriptContent], { type: 'text/plain' });
+            const appleScriptUrl = URL.createObjectURL(appleScriptBlob);
+            const appleScriptLink = document.createElement('a');
+            appleScriptLink.href = appleScriptUrl;
+            appleScriptLink.download = 'open-terminal.applescript';
+            document.body.appendChild(appleScriptLink);
+            appleScriptLink.click();
+            document.body.removeChild(appleScriptLink);
+            
+            addLog('info', 'Double-click "open-terminal.applescript" to automatically open Terminal and start installation!');
+            updateStatus('Double-click open-terminal.applescript to start!', 'success');
+          }, 1000);
+          
+          updateProgress(50);
           startStatusPolling();
-        } else if (platform === 'windows') {
-          addLog('info', 'Downloading PowerShell install script...');
           
+        } else if (platform === 'linux') {
+          addLog('info', 'Creating Linux launcher...');
+          
+          // Create a shell script that opens terminal and runs install
+          const launcherScript = \`#!/bin/bash
+# Get directory where this script is located
+SCRIPT_DIR="\\$(cd "\\$(dirname "\\$0")" && pwd)"
+cd "\\$SCRIPT_DIR"
+
+# Detect terminal emulator
+if command -v gnome-terminal &> /dev/null; then
+    gnome-terminal -- bash -c "curl -s -H 'Authorization: Bearer \${CONFIG.authToken}' '\${scriptUrl}' > install-minr-miner.sh && chmod +x install-minr-miner.sh && ./install-minr-miner.sh; exec bash"
+elif command -v xterm &> /dev/null; then
+    xterm -e "curl -s -H 'Authorization: Bearer \${CONFIG.authToken}' '\${scriptUrl}' > install-minr-miner.sh && chmod +x install-minr-miner.sh && ./install-minr-miner.sh; exec bash"
+elif command -v konsole &> /dev/null; then
+    konsole -e bash -c "curl -s -H 'Authorization: Bearer \${CONFIG.authToken}' '\${scriptUrl}' > install-minr-miner.sh && chmod +x install-minr-miner.sh && ./install-minr-miner.sh; exec bash"
+else
+    echo "No terminal emulator found. Please run manually:"
+    echo "curl -s -H 'Authorization: Bearer \${CONFIG.authToken}' '\${scriptUrl}' > install-minr-miner.sh"
+    echo "chmod +x install-minr-miner.sh"
+    echo "./install-minr-miner.sh"
+fi\`;
+          
+          const launcherBlob = new Blob([launcherScript], { type: 'application/x-sh' });
+          const launcherUrl = URL.createObjectURL(launcherBlob);
           const a = document.createElement('a');
-          a.href = scriptUrl_local;
-          a.download = 'install-minr-miner.ps1';
+          a.href = launcherUrl;
+          a.download = 'launch-install.sh';
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
           
-          addLog('success', 'Script downloaded!');
-          addLog('info', 'To install:');
-          addLog('info', '  1. Right-click install-minr-miner.ps1');
-          addLog('info', '  2. Select "Run with PowerShell"');
-          addLog('info', '  Or open PowerShell and run: .\\install-minr-miner.ps1');
+          addLog('success', 'Launcher downloaded! Run: chmod +x launch-install.sh && ./launch-install.sh');
+          updateStatus('Run: chmod +x launch-install.sh && ./launch-install.sh', 'warning');
+          updateProgress(50);
+          startStatusPolling();
           
-          updateStatus('Script downloaded. Run it in PowerShell to install.', 'warning');
-          updateProgress(30);
+        } else if (platform === 'windows') {
+          addLog('info', 'Creating Windows launcher...');
           
+          // Create PowerShell launcher that opens PowerShell and runs install
+          const launcherScript = \`# Minr.online Auto-Launcher for Windows
+\\$scriptDir = Split-Path -Parent \\$MyInvocation.MyCommand.Path
+Set-Location \\$scriptDir
+
+# Download and run install script
+\\$headers = @{
+    "Authorization" = "Bearer \${CONFIG.authToken}"
+}
+Invoke-WebRequest -Uri "\${scriptUrl}" -Headers \\$headers -OutFile "install-minr-miner.ps1"
+Start-Process powershell -ArgumentList "-NoExit", "-File", "install-minr-miner.ps1"\`;
+          
+          const launcherBlob = new Blob([launcherScript], { type: 'application/x-powershell' });
+          const launcherUrl = URL.createObjectURL(launcherBlob);
+          const a = document.createElement('a');
+          a.href = launcherUrl;
+          a.download = 'launch-install.ps1';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          
+          addLog('success', 'Launcher downloaded! Right-click launch-install.ps1 and select "Run with PowerShell"');
+          updateStatus('Right-click launch-install.ps1 and select "Run with PowerShell"', 'warning');
+          updateProgress(50);
           startStatusPolling();
         }
       } catch (error) {
@@ -605,9 +690,20 @@ function generateLauncherHTML(config: {
       // This will be implemented based on stats format
     }
     
-    // Initialize
-    addLog('info', \`Platform detected: \${platform}\`);
-    addLog('info', \`User: \${CONFIG.userEmail}\`);
+    // Auto-start installation if file is opened locally (file:// protocol)
+    window.addEventListener('load', () => {
+      addLog('info', \`Platform detected: \${platform}\`);
+      addLog('info', \`User: \${CONFIG.userEmail}\`);
+      
+      // Check if opened as local file
+      if (window.location.protocol === 'file:') {
+        addLog('info', 'Local file detected - ready for auto-installation');
+        updateStatus('Click "Start Installation" to begin automatically!', 'info');
+      } else {
+        addLog('info', 'Opened from web - download will start when you click the button');
+        updateStatus('Ready to install. Click "Start Installation" to begin.', 'info');
+      }
+    });
   </script>
 </body>
 </html>`;
