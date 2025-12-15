@@ -36,7 +36,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
           },
           { onConflict: 'id' }
         )
-        .select('has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
+        .select('id, has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
         .single();
 
       if (createError) {
@@ -52,7 +52,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
         return res.status(500).json({ error: 'Failed to create profile - no data returned' });
       }
 
-      console.log('[standalone-miner] Profile created successfully:', newProfile.id);
+      console.log('[standalone-miner] Profile created successfully:', newProfile.id || userId);
       profile = newProfile;
     }
 
