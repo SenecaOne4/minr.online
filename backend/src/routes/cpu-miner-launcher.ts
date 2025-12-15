@@ -535,8 +535,10 @@ end tell
 tell application "Terminal"
     activate
     do shell script "chmod +x " & quoted form of launcherPosixPath
-    set theCommand to "cd " & quoted form of scriptDirPosix & " && /bin/bash " & quoted form of launcherPosixPath
-    do script theCommand
+    set theCmd to "cd " & quoted form of scriptDirPosix & " && /bin/bash " & quoted form of launcherPosixPath
+    tell application "System Events" to keystroke "t" using command down
+    delay 0.5
+    do script theCmd in front window
 end tell\`;
             
             const appleScriptBlob = new Blob([appleScriptContent], { type: 'text/plain' });
