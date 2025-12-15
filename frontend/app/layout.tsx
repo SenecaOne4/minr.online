@@ -82,6 +82,9 @@ export async function generateMetadata(): Promise<Metadata> {
       statusBarStyle: 'default',
       title: 'Minr.online',
     },
+    other: {
+      'mobile-web-app-capable': 'yes',
+    },
   };
 }
 
