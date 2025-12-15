@@ -1015,35 +1015,69 @@ fi
 
 update_status "installing" "Building cpuminer..." 70
 
-# Build cpuminer
+# Build cpuminer with automatic retry and cleanup
 cd "$CPUMINER_DIR"
 log "Building cpuminer..."
-# Try autogen.sh first, fall back to autoreconf if it fails (newer autoconf compatibility)
-if ! ./autogen.sh 2>&1; then
-    log "autogen.sh failed, trying autoreconf instead..."
-    autoreconf -fiv || {
-        log "Error running autoreconf"
-        update_status "error" "Build failed at autogen" 0
-        exit 1
-    }
+
+# Set environment variables for curl (Linux - may vary by distro)
+# Try to detect curl pkg-config path
+if [ -d "/usr/lib/x86_64-linux-gnu/pkgconfig" ]; then
+    export PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
+fi
+if [ -d "/usr/lib64/pkgconfig" ]; then
+    export PKG_CONFIG_PATH="/usr/lib64/pkgconfig:$PKG_CONFIG_PATH"
 fi
 
-# Set environment variables for curl (Homebrew keg-only)
-export PKG_CONFIG_PATH="/opt/homebrew/opt/curl/lib/pkgconfig:$PKG_CONFIG_PATH"
-export LDFLAGS="-L/opt/homebrew/opt/curl/lib $LDFLAGS"
-export CPPFLAGS="-I/opt/homebrew/opt/curl/include $CPPFLAGS"
-
-./configure CFLAGS="-O3" || {
-    log "Error running configure"
-    update_status "error" "Build failed at configure" 0
-    exit 1
+# Function to build cpuminer (can be called multiple times if needed)
+build_cpuminer() {
+    # Clean any previous failed build artifacts
+    make clean 2>/dev/null || true
+    make distclean 2>/dev/null || true
+    
+    # Try autogen.sh first, fall back to autoreconf if it fails
+    if ! ./autogen.sh 2>&1; then
+        log "autogen.sh failed, trying autoreconf instead..."
+        autoreconf -fiv || {
+            log "Error running autoreconf"
+            return 1
+        }
+    fi
+    
+    # Run configure
+    ./configure CFLAGS="-O3" || {
+        log "Configure failed - this might be due to stale build files"
+        return 1
+    }
+    
+    # Build
+    make -j$(nproc) || {
+        log "Make failed"
+        return 1
+    }
+    
+    return 0
 }
 
-make -j$(nproc) || {
-    log "Error building cpuminer"
-    update_status "error" "Build failed" 0
-    exit 1
-}
+# Try building - if it fails, clean everything and retry once
+if ! build_cpuminer; then
+    log "First build attempt failed. Cleaning and retrying..."
+    cd "$INSTALL_DIR"
+    rm -rf "$CPUMINER_DIR"
+    git clone https://github.com/pooler/cpuminer.git "$CPUMINER_DIR" || {
+        log "Error cloning cpuminer repository"
+        update_status "error" "Failed to clone repository" 0
+        exit 1
+    }
+    cd "$CPUMINER_DIR"
+    
+    if ! build_cpuminer; then
+        log "Build failed after retry"
+        update_status "error" "Build failed" 0
+        exit 1
+    fi
+fi
+
+log "cpuminer built successfully!"
 
 update_status "installing" "Fetching configuration..." 85
 
