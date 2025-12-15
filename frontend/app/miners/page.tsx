@@ -92,7 +92,7 @@ export default function MinersPage() {
             Miner Instructions
           </h1>
           <p className="text-xl text-gray-300">
-            Connect your CPU miner, ASIC miner, or download our desktop miner
+            Download the CPU miner launcher or connect your ASIC miner
           </p>
         </div>
 
@@ -140,88 +140,6 @@ export default function MinersPage() {
             </div>
 
             <div className="space-y-6">
-              {/* HTML Miner Option */}
-              <div className="p-4 bg-gray-800/30 rounded-lg border border-white/10">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Browser Miner (HTML)</h3>
-                    <p className="text-sm text-gray-400">Easy to use, no installation required</p>
-                  </div>
-                  <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">Easy</span>
-                </div>
-                <p className="text-sm text-gray-300 mb-3">
-                  Download a standalone HTML file that runs in your browser. Perfect for quick testing or low-resource mining.
-                </p>
-                <button
-                  onClick={async (e) => {
-                    if (!user) {
-                      alert('Please log in to download the miner');
-                      return;
-                    }
-                    const { data: { session } } = await supabase!.auth.getSession();
-                    if (!session) {
-                      alert('Please log in to download the miner');
-                      return;
-                    }
-                    
-                    try {
-                      const response = await fetch('/api/standalone-miner', {
-                        headers: { Authorization: `Bearer ${session.access_token}` },
-                      });
-                      
-                      if (!response.ok) {
-                        const errorText = await response.text();
-                        let errorMessage = 'Failed to download miner';
-                        try {
-                          const errorJson = JSON.parse(errorText);
-                          errorMessage = errorJson.error || errorMessage;
-                        } catch {
-                          errorMessage = errorText || errorMessage;
-                        }
-                        alert(`Error: ${errorMessage}`);
-                        return;
-                      }
-                      
-                      // Verify content type
-                      const contentType = response.headers.get('content-type');
-                      console.log('Download response - Content-Type:', contentType, 'Status:', response.status);
-                      
-                      const blob = await response.blob();
-                      console.log('Blob type:', blob.type, 'size:', blob.size);
-                      
-                      // Check if blob is empty
-                      if (blob.size === 0) {
-                        alert('Error: Downloaded file is empty. Please try again.');
-                        return;
-                      }
-                      
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `minr-desktop-miner-${Date.now()}.html`;
-                      document.body.appendChild(a);
-                      a.click();
-                      window.URL.revokeObjectURL(url);
-                      document.body.removeChild(a);
-                      
-                      // Show success message
-                      setTimeout(() => {
-                        alert('Download complete! Open the HTML file in your browser to start mining.');
-                      }, 100);
-                    } catch (error: any) {
-                      console.error('Download error:', error);
-                      alert(`Error downloading miner: ${error.message || 'Unknown error'}`);
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download HTML Miner
-                </button>
-              </div>
-
               {/* CPU Miner Option */}
               <div className="p-4 bg-gray-800/30 rounded-lg border border-white/10">
                 <div className="flex items-start justify-between mb-3">

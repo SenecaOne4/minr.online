@@ -43,14 +43,21 @@ router.get('/user-stats', authMiddleware, async (req: AuthenticatedRequest, res:
     // Get total shares
     let sharesQuery = supabase!
       .from('share_submissions')
-      .select('status')
+      .select('status, submitted_at')
       .eq('user_id', userId);
 
     if (dateFilter) {
       sharesQuery = sharesQuery.gte('submitted_at', dateFilter.toISOString());
     }
 
-    const { data: shares } = await sharesQuery;
+    const { data: shares, error: sharesError } = await sharesQuery;
+    
+    if (sharesError) {
+      console.error('[analytics] Error fetching shares:', sharesError);
+    } else {
+      console.log(`[analytics] Found ${shares?.length || 0} shares for user ${userId} in period ${period}`);
+    }
+    
     const acceptedShares = shares?.filter(s => s.status === 'accepted').length || 0;
     const rejectedShares = shares?.filter(s => s.status === 'rejected').length || 0;
     const totalShares = acceptedShares + rejectedShares;

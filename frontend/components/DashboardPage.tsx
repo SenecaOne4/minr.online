@@ -372,56 +372,23 @@ export default function DashboardPage({ user }: { user: any }) {
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-purple-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
           <h2 className="text-2xl font-bold mb-4 text-white">Start Mining</h2>
           <p className="text-gray-300 mb-6">
-            Join the lottery pool! If someone solves a block, we split the BTC payout. Use our browser-based miner or download the desktop miner.
+            Join the lottery pool! If someone solves a block, we split the BTC payout. Download the CPU miner launcher to get started.
           </p>
           {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) && (
-            <div className="flex flex-wrap gap-4">
+            <div>
               <Link
-                href="/miner"
-                className="inline-block bg-gradient-to-r from-green-600 via-emerald-600 to-green-700 hover:from-green-700 hover:via-emerald-700 hover:to-green-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
+                href="/miners"
+                className="inline-block bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 hover:from-purple-700 hover:via-pink-700 hover:to-purple-800 text-white px-6 py-2 rounded-xl text-base font-semibold transition-all duration-200 shadow-lg hover:shadow-xl"
               >
-                Launch Browser Miner →
+                Download CPU Miner Launcher →
               </Link>
-              <a
-                href="/api/miner-download"
-                download
-                className="inline-block bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 hover:from-purple-700 hover:via-pink-700 hover:to-purple-800 text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
-              >
-                Download Desktop Miner →
-              </a>
-              <div className="mt-6 pt-6 border-t border-white/10 space-y-3">
-                <p className="text-sm font-semibold text-white">What's included:</p>
-                <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
-                  <li>Your Bitcoin wallet address pre-configured</li>
-                  <li>Connection settings to the pool</li>
-                  <li>GUI and CLI modes</li>
-                  <li>Real-time statistics reporting</li>
-                </ul>
-                <div className="pt-3">
-                  <p className="text-sm font-semibold text-white mb-2">How to use:</p>
-                  <div className="bg-black/30 border border-white/20 rounded-lg p-3 font-mono text-sm text-green-400">
-                    <code>python minr-miner.py</code>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    For CLI mode: <code className="bg-black/30 px-1 rounded">python minr-miner.py --cli</code>
-                  </p>
-                </div>
-                <div className="pt-3">
-                  <Link
-                    href="/miners"
-                    className="text-sm text-blue-400 hover:text-blue-300 underline"
-                  >
-                    View full miner instructions (CPU, ASIC, Desktop) →
-                  </Link>
-                </div>
-              </div>
+              {hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin ? (
+                <p className="text-sm text-gray-400 mt-4">
+                  Make sure your profile is complete with a BTC payout address before mining.
+                </p>
+              ) : null}
             </div>
           )}
-          {hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin ? (
-            <p className="text-sm text-gray-400 mt-4">
-              Make sure your profile is complete with a BTC payout address before mining.
-            </p>
-          ) : null}
         </div>
       </main>
     </div>

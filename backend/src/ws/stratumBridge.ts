@@ -369,6 +369,7 @@ export function handleStratumConnection(ws: WebSocket): void {
                   nonce: nonce,
                   status: 'pending',
                   difficulty: meta.currentJob?.difficulty || 1,
+                  submitted_at: new Date().toISOString(), // Explicitly set timestamp for analytics queries
                 })
                 .select()
                 .single();
