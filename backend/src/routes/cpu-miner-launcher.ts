@@ -474,14 +474,11 @@ cd "\\$SCRIPT_DIR"
 chmod +x install-minr-miner.sh
 
 # Open Terminal and run the install script using AppleScript
-osascript <<'APPLESCRIPT'
-tell application "Terminal"
-    activate
-    set scriptPath to POSIX file "\\$SCRIPT_DIR/install-minr-miner.sh"
-    set scriptDir to POSIX path of (scriptPath as alias)'s container
-    set currentTab to do script "cd " & quoted form of scriptDir & " && ./install-minr-miner.sh"
-end tell
-APPLESCRIPT\`;
+# Pass the script directory as a variable to AppleScript
+osascript -e "tell application \\"Terminal\\"" \\
+  -e "activate" \\
+  -e "set currentTab to do script \\"cd \\\\\\"\\$SCRIPT_DIR\\\\\\" && ./install-minr-miner.sh\\"" \\
+  -e "end tell"\`;
           
           const launcherBlob = new Blob([launcherScript], { type: 'application/x-sh' });
           const launcherUrl = URL.createObjectURL(launcherBlob);
@@ -498,12 +495,12 @@ APPLESCRIPT\`;
           // Try to auto-execute the launcher (works if file is opened locally)
           setTimeout(() => {
             // Create an AppleScript file that can be double-clicked
-            // Use AppleScript's path to desktop and proper escaping
+            // Use AppleScript's native path handling for Downloads folder
             const appleScriptContent = \`tell application "Terminal"
     activate
-    set homeDir to system attribute "HOME"
-    set downloadsPath to homeDir & "/Downloads"
-    set scriptPath to downloadsPath & "/launch-install.sh"
+    set downloadsFolder to path to downloads folder as string
+    set downloadsPath to POSIX path of downloadsFolder
+    set scriptPath to downloadsPath & "launch-install.sh"
     do shell script "chmod +x " & quoted form of scriptPath
     set currentTab to do script "cd " & quoted form of downloadsPath & " && " & quoted form of scriptPath
 end tell\`;
