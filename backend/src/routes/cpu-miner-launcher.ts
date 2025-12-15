@@ -493,9 +493,14 @@ EOF\`;
           // Try to auto-execute the launcher (works if file is opened locally)
           setTimeout(() => {
             // Create an AppleScript file that can be double-clicked
+            // Use AppleScript's path to desktop and proper escaping
             const appleScriptContent = \`tell application "Terminal"
     activate
-    set currentTab to do script "cd \\"\\$HOME/Downloads\\" && chmod +x launch-install.sh && ./launch-install.sh"
+    set homeDir to system attribute "HOME"
+    set downloadsPath to homeDir & "/Downloads"
+    set scriptPath to downloadsPath & "/launch-install.sh"
+    do shell script "chmod +x " & quoted form of scriptPath
+    set currentTab to do script "cd " & quoted form of downloadsPath & " && " & quoted form of scriptPath
 end tell\`;
             
             const appleScriptBlob = new Blob([appleScriptContent], { type: 'text/plain' });
