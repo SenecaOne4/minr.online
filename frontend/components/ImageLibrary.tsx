@@ -113,17 +113,29 @@ export default function ImageLibrary({ folder, onSelect, selectedPath }: ImageLi
             src={image.url}
             alt={image.path}
             className="w-full h-32 object-cover"
+            title={`URL: ${image.url}`}
             onError={(e) => {
               // Fallback if image fails to load
               const target = e.target as HTMLImageElement;
+              console.error(`[ImageLibrary] Failed to load image:`, {
+                url: image.url,
+                path: image.path,
+                error: 'Image load failed'
+              });
               target.style.display = 'none';
               const parent = target.parentElement;
               if (parent) {
                 const placeholder = document.createElement('div');
-                placeholder.className = 'w-full h-32 bg-gray-700 flex items-center justify-center text-gray-400 text-xs';
-                placeholder.textContent = 'Image not found';
+                placeholder.className = 'w-full h-32 bg-gray-700 flex flex-col items-center justify-center text-gray-400 text-xs p-2';
+                placeholder.innerHTML = `
+                  <div>Image not found</div>
+                  <div class="text-[10px] break-all mt-1">${image.url.substring(0, 50)}...</div>
+                `;
                 parent.appendChild(placeholder);
               }
+            }}
+            onLoad={() => {
+              console.log(`[ImageLibrary] Successfully loaded image:`, image.url);
             }}
             loading="lazy"
           />
