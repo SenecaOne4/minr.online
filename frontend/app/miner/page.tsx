@@ -212,9 +212,36 @@ export default function MinerPage() {
       const ws = new WebSocket(WS_URL);
       wsRef.current = ws;
 
-      ws.onopen = () => {
+      ws.onopen = async () => {
         setConnectionStatus('connected');
         addLog('info', 'WebSocket connected');
+
+        // Get user session to send meta message for mining session tracking
+        let userId = '';
+        let sessionId = '';
+        if (supabase) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+              userId = session.user.id;
+              // Generate a unique session ID for this mining instance
+              sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              
+              // Send meta message FIRST so backend can create mining session
+              const metaMsg = {
+                type: 'meta',
+                userId: userId,
+                sessionId: sessionId,
+                workerName: `browser-${navigator.userAgent.includes('iPhone') ? 'iphone' : 'desktop'}-${sessionId.substr(-6)}`,
+              };
+              ws.send(JSON.stringify(metaMsg));
+              addLog('client', `→ Meta: ${JSON.stringify(metaMsg)}`);
+            }
+          } catch (error) {
+            console.error('Error getting user session for meta message:', error);
+            addLog('warning', 'Could not send user info - mining session may not be tracked');
+          }
+        }
 
         // Send mining.subscribe
         const subscribeMsg = {
