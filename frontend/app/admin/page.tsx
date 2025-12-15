@@ -878,6 +878,78 @@ export default function AdminPage() {
             </div>
           )}
 
+          {activeTab === 'mining-instances' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-white">Active Mining Instances</h2>
+                <div className="text-sm text-gray-400">
+                  {miningInstances && (
+                    <>
+                      {miningInstances.total_users} users • {miningInstances.total_instances} instances
+                    </>
+                  )}
+                </div>
+              </div>
+              {loadingInstances ? (
+                <div className="text-center text-white py-8">Loading mining instances...</div>
+              ) : miningInstances && miningInstances.users && miningInstances.users.length > 0 ? (
+                <div className="space-y-6">
+                  {miningInstances.users.map((userGroup: any) => (
+                    <div key={userGroup.user_id} className="bg-black/30 border border-white/20 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">{userGroup.user_email}</h3>
+                          {userGroup.username && (
+                            <p className="text-sm text-gray-400">@{userGroup.username}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-400">Total Hashrate</p>
+                          <p className="text-xl font-bold text-green-400">{formatHashrate(userGroup.total_hashrate)}</p>
+                          <p className="text-xs text-gray-500 mt-1">{userGroup.instance_count} instance{userGroup.instance_count !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {userGroup.instances.map((instance: any) => (
+                          <div key={instance.id} className="bg-white/5 border border-white/10 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                              <span className="font-semibold text-white text-sm">{instance.worker_name}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <p className="text-gray-400">Uptime</p>
+                                <p className="text-white">{instance.uptime}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-400">Hashrate</p>
+                                <p className="text-green-400">{formatHashrate(instance.avg_hashrate)}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-400">Accepted</p>
+                                <p className="text-green-400">{instance.accepted_shares}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-400">Rejected</p>
+                                <p className="text-red-400">{instance.rejected_shares}</p>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">Started: {new Date(instance.started_at).toLocaleString()}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-white py-8">
+                  <p className="text-gray-400">No active mining instances</p>
+                  <p className="text-sm text-gray-500 mt-2">Users will appear here when they start mining</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Save Button */}
           <div className="mt-8 pt-6 border-t border-white/20">
             <button
