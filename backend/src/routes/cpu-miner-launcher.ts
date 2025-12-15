@@ -499,11 +499,13 @@ if [ -f "install-minr-miner.sh" ]; then
     chmod +x install-minr-miner.sh
     
     # Open Terminal and run the install script using AppleScript
-    # Use proper escaping for osascript
-    osascript <<'APPLESCRIPT_EOF'
+    # Use heredoc to avoid escaping issues, but allow variable substitution
+    osascript <<APPLESCRIPT_EOF
 tell application "Terminal"
     activate
-    set currentTab to do script "cd " & quoted form of (POSIX path of (path to me as alias)'s container) & " && /bin/bash ./install-minr-miner.sh"
+    set scriptDir to "${SCRIPT_DIR}"
+    set cmd to "cd " & quoted form of scriptDir & " && /bin/bash ./install-minr-miner.sh"
+    do script cmd
 end tell
 APPLESCRIPT_EOF
 else
