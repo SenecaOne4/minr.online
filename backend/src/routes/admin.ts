@@ -150,7 +150,15 @@ router.get('/images', async (req: AuthenticatedRequest, res: Response) => {
       const { data } = supabase!.storage.from('site-assets').getPublicUrl(normalizedPath);
       
       // Log for debugging
-      console.log(`[admin] Image path: ${path} -> normalized: ${normalizedPath} -> URL: ${data.publicUrl}`);
+      console.log(`[admin] Image path: ${path}`);
+      console.log(`[admin] Normalized path: ${normalizedPath}`);
+      console.log(`[admin] Generated URL: ${data.publicUrl}`);
+      console.log(`[admin] Bucket: site-assets`);
+      
+      // Verify URL format
+      if (!data.publicUrl || !data.publicUrl.startsWith('http')) {
+        console.error(`[admin] Invalid public URL generated: ${data.publicUrl}`);
+      }
       
       return {
         path,

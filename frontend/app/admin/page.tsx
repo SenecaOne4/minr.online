@@ -470,21 +470,41 @@ export default function AdminPage() {
                 </div>
                 {settings?.og_image_url && (
                   <div className="mt-4 flex items-center gap-4">
-                    <img 
-                      src={settings.og_image_url} 
-                      alt="OG Image" 
-                      className="max-w-md rounded-lg border-2 border-white/20 object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="200"%3E%3Crect fill="%23999" width="400" height="200"/%3E%3Ctext fill="%23fff" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not found%3C/text%3E%3C/svg%3E';
-                      }}
-                    />
-                    <button
-                      onClick={() => setSettings({ ...settings, og_image_url: undefined } as SiteSettings)}
-                      className="text-red-400 hover:text-red-300 text-sm transition-colors"
-                    >
-                      Remove
-                    </button>
+                    <div className="relative">
+                      <img 
+                        src={settings.og_image_url} 
+                        alt="OG Image" 
+                        className="w-32 h-32 rounded-lg border-2 border-white/20 object-cover"
+                        title={`OG Image URL: ${settings.og_image_url}`}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          console.error(`[Admin] Failed to load OG image:`, settings.og_image_url);
+                          target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128"%3E%3Crect fill="%23999" width="128" height="128"/%3E%3Ctext fill="%23fff" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-size="12"%3EImage%3C/text%3E%3C/svg%3E';
+                        }}
+                        onLoad={() => {
+                          console.log(`[Admin] Successfully loaded OG image:`, settings.og_image_url);
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(settings.og_image_url || '');
+                          setMessage('OG Image URL copied to clipboard');
+                          setTimeout(() => setMessage(null), 2000);
+                        }}
+                        className="text-blue-400 hover:text-blue-300 text-xs transition-colors"
+                        title="Copy URL"
+                      >
+                        Copy URL
+                      </button>
+                      <button
+                        onClick={() => setSettings({ ...settings, og_image_url: undefined } as SiteSettings)}
+                        className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
