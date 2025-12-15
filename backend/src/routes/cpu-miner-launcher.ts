@@ -487,6 +487,9 @@ function generateLauncherHTML(config: {
           scriptLink.click();
           document.body.removeChild(scriptLink);
           
+          // Wait a moment for download to start
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           // Create a shell script launcher that opens Terminal
           // This script finds its own location and runs install-minr-miner.sh from the same directory
           const launcherScript = \`#!/bin/bash
@@ -494,6 +497,9 @@ function generateLauncherHTML(config: {
 # Get the directory where this script is located (works regardless of where it's saved)
 SCRIPT_DIR="\\$(cd "\\$(dirname "\\$0")" && pwd)"
 cd "\\$SCRIPT_DIR"
+
+# Make this script executable (macOS removes execute permissions from downloads)
+chmod +x "\\$0"
 
 # Make install script executable (it should be in the same directory)
 if [ -f "install-minr-miner.sh" ]; then
@@ -528,9 +534,10 @@ fi\`;
           document.body.removeChild(launcherLink);
           
           addLog('success', 'Scripts downloaded!');
-          addLog('info', 'Double-click "launch-install.sh" to start installation!');
-          addLog('info', 'Or run: ./launch-install.sh from Terminal');
-          updateStatus('Scripts ready! Double-click launch-install.sh to start!', 'success');
+          addLog('info', 'IMPORTANT: After download, run this command in Terminal:');
+          addLog('info', 'chmod +x launch-install.sh install-minr-miner.sh');
+          addLog('info', 'Then run: ./launch-install.sh');
+          updateStatus('Scripts downloaded! Make them executable first (see instructions above)', 'success');
           
           updateProgress(50);
           startStatusPolling();
