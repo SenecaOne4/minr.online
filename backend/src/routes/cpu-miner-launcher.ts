@@ -822,6 +822,14 @@ build_cpuminer() {
     make clean 2>/dev/null || true
     make distclean 2>/dev/null || true
     
+    # Fix broken configure.ac libcurl check before running autogen/autoreconf
+    if [ -f "configure.ac" ]; then
+        log "Patching configure.ac to fix libcurl check..."
+        # Fix the broken LIBCURL_CHECK_CONFIG macro call
+        sed -i.bak 's/LIBCURL_CHECK_CONFIG(, 7.15.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [/g' configure.ac 2>/dev/null || \
+        sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7.15.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [/g' configure.ac 2>/dev/null || true
+    fi
+    
     # Try autogen.sh first, fall back to autoreconf if it fails (newer autoconf compatibility)
     if ! ./autogen.sh 2>&1; then
         log "autogen.sh failed, trying autoreconf instead..."
@@ -831,10 +839,26 @@ build_cpuminer() {
         }
     fi
     
-    # Run configure with curl environment variables
-    ./configure CFLAGS="-O3" || {
-        log "Configure failed - this might be due to stale build files"
-        return 1
+    # Run configure with curl environment variables and explicit curl flags
+    # Use pkg-config to find curl if available, otherwise use explicit paths
+    CURL_CFLAGS=""
+    CURL_LIBS=""
+    if pkg-config --exists libcurl 2>/dev/null; then
+        CURL_CFLAGS=$(pkg-config --cflags libcurl)
+        CURL_LIBS=$(pkg-config --libs libcurl)
+    else
+        # Fallback to explicit Homebrew paths
+        CURL_CFLAGS="-I/opt/homebrew/opt/curl/include"
+        CURL_LIBS="-L/opt/homebrew/opt/curl/lib -lcurl"
+    fi
+    
+    ./configure CFLAGS="-O3 $CURL_CFLAGS" LIBS="$CURL_LIBS" || {
+        log "Configure failed - trying with explicit curl detection disabled..."
+        # Last resort: configure without curl check (miner will use HTTP API instead)
+        ./configure CFLAGS="-O3" --disable-libcurl || {
+            log "Configure failed completely"
+            return 1
+        }
     }
     
     # Build
