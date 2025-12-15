@@ -503,7 +503,7 @@ if [ -f "install-minr-miner.sh" ]; then
     osascript <<APPLESCRIPT_EOF
 tell application "Terminal"
     activate
-    set scriptDir to "${SCRIPT_DIR}"
+    set scriptDir to "\\$SCRIPT_DIR"
     set cmd to "cd " & quoted form of scriptDir & " && /bin/bash ./install-minr-miner.sh"
     do script cmd
 end tell
