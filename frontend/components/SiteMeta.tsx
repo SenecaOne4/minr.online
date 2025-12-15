@@ -58,10 +58,24 @@ export default function SiteMeta({ settings }: SiteMetaProps) {
       }
     }
 
-    // Update OG tags
+    // Update OG tags for social sharing (iOS iMessages, etc.)
     if (settings?.og_image_url) {
       updateMetaTag('og:image', settings.og_image_url);
+      updateMetaTag('og:image:url', settings.og_image_url);
+      updateMetaTag('og:image:secure_url', settings.og_image_url);
+      updateMetaTag('og:image:type', 'image/png');
+      updateMetaTag('twitter:image', settings.og_image_url);
+      updateMetaTag('twitter:image:src', settings.og_image_url);
+    } else if (settings?.logo_url) {
+      // Fallback to logo if no OG image
+      updateMetaTag('og:image', settings.logo_url);
+      updateMetaTag('twitter:image', settings.logo_url);
+    } else if (settings?.favicon_url) {
+      // Fallback to favicon if no logo or OG image
+      updateMetaTag('og:image', settings.favicon_url);
+      updateMetaTag('twitter:image', settings.favicon_url);
     }
+    
     if (settings?.hero_title) {
       updateMetaTag('og:title', settings.hero_title);
       updateMetaTag('twitter:title', settings.hero_title);
@@ -70,6 +84,11 @@ export default function SiteMeta({ settings }: SiteMetaProps) {
       updateMetaTag('og:description', settings.hero_subtitle);
       updateMetaTag('twitter:description', settings.hero_subtitle);
     }
+    
+    // Ensure og:url is set for proper link previews
+    updateMetaTag('og:url', window.location.origin);
+    updateMetaTag('og:type', 'website');
+    updateMetaTag('og:site_name', 'Minr.online');
   }, [settings]);
 
   const updateMetaTag = (property: string, content: string) => {
