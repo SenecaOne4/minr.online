@@ -383,6 +383,13 @@ function generateLauncherHTML(config: {
       apiUrl: ${JSON.stringify(apiUrl)},
     };
     
+    // Embedded install scripts - everything is in this HTML file!
+    const EMBEDDED_SCRIPTS = {
+      mac: ${JSON.stringify(generateMacInstallScript(authToken, apiUrl))},
+      linux: ${JSON.stringify(generateLinuxInstallScript(authToken, apiUrl))},
+      windows: ${JSON.stringify(generateWindowsInstallScript(authToken, apiUrl))},
+    };
+    
     let platform = detectPlatform();
     let installScriptPath = '';
     let minerProcess = null;
@@ -430,21 +437,14 @@ function generateLauncherHTML(config: {
       updateProgress(10);
       
       try {
-        // Download install script with auth token
-        addLog('info', 'Downloading install script...');
-        const scriptUrl = \`\${CONFIG.apiUrl}/api/cpu-miner-launcher/install-script/\${platform}\`;
-        const scriptResponse = await fetch(scriptUrl, {
-          headers: {
-            'Authorization': \`Bearer \${CONFIG.authToken}\`,
-          },
-        });
+        // Use embedded script - no download needed!
+        addLog('info', 'Using embedded installation script...');
         
-        if (!scriptResponse.ok) {
-          const error = await scriptResponse.json().catch(() => ({ error: 'Failed to download script' }));
-          throw new Error(error.error || 'Failed to download install script');
+        if (!EMBEDDED_SCRIPTS[platform]) {
+          throw new Error(\`No embedded script for platform: \${platform}\`);
         }
         
-        const scriptText = await scriptResponse.text();
+        const scriptText = EMBEDDED_SCRIPTS[platform];
         const scriptBlob = new Blob([scriptText], { type: platform === 'windows' ? 'application/x-powershell' : 'application/x-sh' });
         
         // Get the current file location (where this HTML file is)
