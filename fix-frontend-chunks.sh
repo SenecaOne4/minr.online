@@ -8,11 +8,14 @@ cd /var/www/minr-online/frontend
 echo "=== Fixing Frontend Chunk Loading Errors ==="
 echo ""
 
-# 1. Kill all Next.js processes
-echo "1. Killing existing Next.js processes..."
+# 1. Kill all Next.js processes and anything using port 3001
+echo "1. Killing existing Next.js processes and freeing port 3001..."
 pkill -9 -f 'next start' || true
 pkill -9 -f 'node.*next' || true
-sleep 2
+pkill -9 -f 'next-server' || true
+# Kill anything using port 3001
+lsof -ti:3001 | xargs kill -9 2>/dev/null || true
+sleep 3
 
 # 2. Remove old build
 echo "2. Removing old .next directory..."
