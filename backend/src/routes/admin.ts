@@ -405,24 +405,10 @@ router.get('/mining-instances', async (req: AuthenticatedRequest, res: Response)
       return res.status(503).json({ error: 'Supabase not configured' });
     }
 
-    // Get all active mining sessions with user info
+    // Get all active mining sessions
     const { data: sessions, error } = await supabase!
       .from('mining_sessions')
-      .select(`
-        id,
-        user_id,
-        worker_name,
-        started_at,
-        total_hashes,
-        accepted_shares,
-        rejected_shares,
-        avg_hashrate,
-        profiles:user_id (
-          id,
-          username,
-          email:auth.users!inner(email)
-        )
-      `)
+      .select('id, user_id, worker_name, started_at, total_hashes, accepted_shares, rejected_shares, avg_hashrate')
       .is('ended_at', null)
       .order('started_at', { ascending: false });
 
@@ -431,25 +417,44 @@ router.get('/mining-instances', async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ error: error.message });
     }
 
+    // Get unique user IDs
+    const userIds = [...new Set((sessions || []).map((s: any) => s.user_id))];
+    
+    // Fetch user emails and usernames
+    const userInfoMap: Record<string, { email: string; username: string | null }> = {};
+    for (const userId of userIds) {
+      try {
+        const { data: authUser } = await supabase!.auth.admin.getUserById(userId);
+        const email = authUser?.user?.email || 'Unknown';
+        
+        // Get username from profile
+        const { data: profile } = await supabase!
+          .from('profiles')
+          .select('username')
+          .eq('id', userId)
+          .single();
+        
+        userInfoMap[userId] = {
+          email,
+          username: profile?.username || null,
+        };
+      } catch (e) {
+        console.error('[admin] Error fetching user info:', e);
+        userInfoMap[userId] = { email: 'Unknown', username: null };
+      }
+    }
+
     // Group by user_id
     const userGroups: Record<string, any> = {};
     
     for (const session of sessions || []) {
       const userId = session.user_id;
       if (!userGroups[userId]) {
-        // Get user email from auth.users
-        let userEmail = 'Unknown';
-        try {
-          const { data: authUser } = await supabase!.auth.admin.getUserById(userId);
-          userEmail = authUser?.user?.email || 'Unknown';
-        } catch (e) {
-          console.error('[admin] Error fetching user email:', e);
-        }
-
+        const userInfo = userInfoMap[userId] || { email: 'Unknown', username: null };
         userGroups[userId] = {
           user_id: userId,
-          user_email: userEmail,
-          username: session.profiles?.username || null,
+          user_email: userInfo.email,
+          username: userInfo.username,
           instances: [],
           total_hashrate: 0,
         };
