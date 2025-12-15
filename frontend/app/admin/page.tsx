@@ -378,7 +378,7 @@ export default function AdminPage() {
             <button
               key={tab}
               onClick={() => {
-                setActiveTab(tab);
+                setActiveTab(tab as typeof activeTab);
                 if (tab === 'users') {
                   loadUsers();
                 } else if (tab === 'mining-instances') {
