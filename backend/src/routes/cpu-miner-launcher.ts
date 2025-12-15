@@ -501,7 +501,7 @@ if [ -f "install-minr-miner.sh" ]; then
     # Open Terminal and run the install script using AppleScript
     osascript -e "tell application \\"Terminal\\"" \\
       -e "activate" \\
-      -e "set currentTab to do script \\"cd \\\\\\"\\$SCRIPT_DIR\\\\\\" && ./install-minr-miner.sh\\"" \\
+      -e "set currentTab to do script \\"cd \\\\\\"\\$SCRIPT_DIR\\\\\\" && /bin/bash ./install-minr-miner.sh\\"" \\
       -e "end tell"
 else
     echo "Error: install-minr-miner.sh not found in \\$SCRIPT_DIR"
