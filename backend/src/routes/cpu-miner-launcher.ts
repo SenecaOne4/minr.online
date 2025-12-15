@@ -499,20 +499,22 @@ if [ -f "install-minr-miner.sh" ]; then
     chmod +x install-minr-miner.sh
     
     # Create a .command file that Terminal will execute automatically
-    # macOS will run .command files in Terminal when double-clicked
+    # macOS will run .command files in Terminal when opened
     CMD_FILE="\\$SCRIPT_DIR/run-install.command"
     cat > "\\$CMD_FILE" <<'CMDFILE_EOF'
 #!/bin/bash
 cd "$(dirname "$0")"
 /bin/bash ./install-minr-miner.sh
+read -p "Press Enter to close..."
 CMDFILE_EOF
     chmod +x "\\$CMD_FILE"
     
-    # Open Terminal with the .command file
-    open -a Terminal "\\$CMD_FILE"
+    # Open the .command file - macOS will execute it in Terminal automatically
+    open "\\$CMD_FILE"
 else
     echo "Error: install-minr-miner.sh not found in \\$SCRIPT_DIR"
-    osascript -e "display dialog \\"Error: install-minr-miner.sh not found in the same folder as launch-install.sh\\" buttons {\\"OK\\"} default button \\"OK\\""
+    echo "Please make sure install-minr-miner.sh is in the same folder as launch-install.sh"
+    read -p "Press Enter to close..."
 fi\`;
           
           const launcherBlob = new Blob([launcherScript], { type: 'application/x-sh' });
