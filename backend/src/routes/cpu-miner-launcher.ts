@@ -820,6 +820,11 @@ if ! ./autogen.sh 2>&1; then
     }
 fi
 
+# Set environment variables for curl (Homebrew keg-only)
+export PKG_CONFIG_PATH="/opt/homebrew/opt/curl/lib/pkgconfig:$PKG_CONFIG_PATH"
+export LDFLAGS="-L/opt/homebrew/opt/curl/lib $LDFLAGS"
+export CPPFLAGS="-I/opt/homebrew/opt/curl/include $CPPFLAGS"
+
 ./configure CFLAGS="-O3" || {
     log "Error running configure"
     update_status "error" "Build failed at configure" 0
@@ -992,6 +997,11 @@ if ! ./autogen.sh 2>&1; then
         exit 1
     }
 fi
+
+# Set environment variables for curl (Homebrew keg-only)
+export PKG_CONFIG_PATH="/opt/homebrew/opt/curl/lib/pkgconfig:$PKG_CONFIG_PATH"
+export LDFLAGS="-L/opt/homebrew/opt/curl/lib $LDFLAGS"
+export CPPFLAGS="-I/opt/homebrew/opt/curl/include $CPPFLAGS"
 
 ./configure CFLAGS="-O3" || {
     log "Error running configure"
