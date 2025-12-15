@@ -470,13 +470,18 @@ function generateLauncherHTML(config: {
 SCRIPT_DIR="\\$(cd "\\$(dirname "\\$0")" && pwd)"
 cd "\\$SCRIPT_DIR"
 
-# Open Terminal and run the install script
-osascript <<EOF
+# Make install script executable
+chmod +x install-minr-miner.sh
+
+# Open Terminal and run the install script using AppleScript
+osascript <<'APPLESCRIPT'
 tell application "Terminal"
     activate
-    set currentTab to do script "cd \\"\\$SCRIPT_DIR\\" && chmod +x install-minr-miner.sh && ./install-minr-miner.sh"
+    set scriptPath to POSIX file "\\$SCRIPT_DIR/install-minr-miner.sh"
+    set scriptDir to POSIX path of (scriptPath as alias)'s container
+    set currentTab to do script "cd " & quoted form of scriptDir & " && ./install-minr-miner.sh"
 end tell
-EOF\`;
+APPLESCRIPT\`;
           
           const launcherBlob = new Blob([launcherScript], { type: 'application/x-sh' });
           const launcherUrl = URL.createObjectURL(launcherBlob);
