@@ -810,11 +810,15 @@ update_status "installing" "Building cpuminer..." 70
 # Build cpuminer
 cd "$CPUMINER_DIR"
 log "Building cpuminer..."
-./autogen.sh || {
-    log "Error running autogen.sh"
-    update_status "error" "Build failed at autogen" 0
-    exit 1
-}
+# Try autogen.sh first, fall back to autoreconf if it fails (newer autoconf compatibility)
+if ! ./autogen.sh 2>&1; then
+    log "autogen.sh failed, trying autoreconf instead..."
+    autoreconf -fiv || {
+        log "Error running autoreconf"
+        update_status "error" "Build failed at autogen" 0
+        exit 1
+    }
+fi
 
 ./configure CFLAGS="-O3" || {
     log "Error running configure"
@@ -979,11 +983,15 @@ update_status "installing" "Building cpuminer..." 70
 # Build cpuminer
 cd "$CPUMINER_DIR"
 log "Building cpuminer..."
-./autogen.sh || {
-    log "Error running autogen.sh"
-    update_status "error" "Build failed at autogen" 0
-    exit 1
-}
+# Try autogen.sh first, fall back to autoreconf if it fails (newer autoconf compatibility)
+if ! ./autogen.sh 2>&1; then
+    log "autogen.sh failed, trying autoreconf instead..."
+    autoreconf -fiv || {
+        log "Error running autoreconf"
+        update_status "error" "Build failed at autogen" 0
+        exit 1
+    }
+fi
 
 ./configure CFLAGS="-O3" || {
     log "Error running configure"
