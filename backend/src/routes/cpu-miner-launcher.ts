@@ -1,29 +1,20 @@
 import { Router, Response } from 'express';
 import { supabase } from '../supabaseClient';
 import { AuthenticatedRequest, authMiddleware } from '../middleware/auth';
-import { readFileSync, appendFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 
 const router: Router = Router();
 
 // GET /api/cpu-miner-launcher - Generate personalized HTML launcher page
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-  // #region agent log
-  try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:10',message:'Route entry',data:{hasUser:!!req.user,userId:req.user?.id,userEmail:req.user?.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:10',message:'Route entry',data:{hasUser:!!req.user,userId:req.user?.id,userEmail:req.user?.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
-  // #endregion
   try {
     if (!supabase) {
-      // #region agent log
-      try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:13',message:'Supabase not configured',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:13',message:'Supabase not configured',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e2){}}
-      // #endregion
       return res.status(503).json({ error: 'Supabase not configured' });
     }
 
     const userId = req.user!.id;
     const userEmail = req.user!.email || '';
-    // #region agent log
-    try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:18',message:'Before profile query',data:{userId,userEmail,userIdLength:userId.length,userIdType:typeof userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:18',message:'Before profile query',data:{userId,userEmail,userIdLength:userId.length,userIdType:typeof userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})+'\n');}catch(e2){}}
-    // #endregion
 
     // Get or create profile (auto-create if doesn't exist)
     let { data: profile, error: profileError } = await supabase!
@@ -32,16 +23,9 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       .eq('id', userId)
       .single();
 
-    // #region agent log
-    try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:27',message:'After profile query',data:{hasProfile:!!profile,hasError:!!profileError,errorCode:profileError?.code,errorMessage:profileError?.message,errorDetails:profileError?.details,profileId:profile?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:27',message:'After profile query',data:{hasProfile:!!profile,hasError:!!profileError,errorCode:profileError?.code,errorMessage:profileError?.message,errorDetails:profileError?.details,profileId:profile?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
-    // #endregion
-
     // If profile doesn't exist, create it using upsert (safer than insert)
     if (!profile || profileError) {
       console.log('[cpu-miner-launcher] Profile not found, creating with upsert for user:', userId);
-      // #region agent log
-      try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:30',message:'Before upsert',data:{userId,upsertData:{id:userId,username:null,btc_payout_address:null}},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:30',message:'Before upsert',data:{userId,upsertData:{id:userId,username:null,btc_payout_address:null}},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
-      // #endregion
       const { data: newProfile, error: createError } = await supabase!
         .from('profiles')
         .upsert(
@@ -55,15 +39,8 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
         .select('id, has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address')
         .single();
 
-      // #region agent log
-      try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:42',message:'After upsert',data:{hasNewProfile:!!newProfile,hasError:!!createError,errorCode:createError?.code,errorMessage:createError?.message,errorDetails:createError?.details,errorHint:createError?.hint,newProfileId:newProfile?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:42',message:'After upsert',data:{hasNewProfile:!!newProfile,hasError:!!createError,errorCode:createError?.code,errorMessage:createError?.message,errorDetails:createError?.details,errorHint:createError?.hint,newProfileId:newProfile?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
-      // #endregion
-
       if (createError) {
         console.error('[cpu-miner-launcher] Error creating profile:', createError);
-        // #region agent log
-        try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:45',message:'Upsert error returned',data:{errorCode:createError.code,errorMessage:createError.message,errorDetails:createError.details,errorHint:createError.hint},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:45',message:'Upsert error returned',data:{errorCode:createError.code,errorMessage:createError.message,errorDetails:createError.details,errorHint:createError.hint},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
-        // #endregion
         return res.status(500).json({ 
           error: 'Failed to create profile',
           details: createError.message 
@@ -72,16 +49,10 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
 
       if (!newProfile) {
         console.error('[cpu-miner-launcher] Profile upsert returned no data');
-        // #region agent log
-        try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:52',message:'Upsert returned no data',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:52',message:'Upsert returned no data',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
-        // #endregion
         return res.status(500).json({ error: 'Failed to create profile - no data returned' });
       }
 
       console.log('[cpu-miner-launcher] Profile created successfully:', newProfile.id || userId);
-      // #region agent log
-      try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:56',message:'Profile created successfully',data:{newProfileId:newProfile.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:56',message:'Profile created successfully',data:{newProfileId:newProfile.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
-      // #endregion
       profile = newProfile;
     }
 
@@ -126,6 +97,21 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     res.send(html);
   } catch (error: any) {
     console.error('[cpu-miner-launcher] Error generating launcher:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/cpu-miner-launcher/script - Get Python miner script
+router.get('/script', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const scriptPath = join(__dirname, '../../../../miner-scripts/minr-stratum-miner.py');
+    const script = readFileSync(scriptPath, 'utf-8');
+    
+    res.setHeader('Content-Type', 'text/x-python');
+    res.setHeader('Content-Disposition', 'attachment; filename="minr-stratum-miner.py"');
+    res.send(script);
+  } catch (error: any) {
+    console.error('[cpu-miner-launcher] Error reading Python script:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -740,8 +726,8 @@ fi\`;
 
 function generateMacInstallScript(authToken: string, apiUrl: string): string {
   return `#!/bin/bash
-# Minr.online CPU Miner Installer for macOS
-# This script installs dependencies and sets up cpuminer
+# Minr.online Python Miner Installer for macOS
+# Simple installation - no C build required!
 
 set -e
 
@@ -762,163 +748,55 @@ update_status() {
     echo "{\\"status\\": \\"$1\\", \\"step\\": \\"$2\\", \\"progress\\": $3}" > "$STATUS_FILE"
 }
 
-log "Starting Minr.online CPU Miner installation for macOS"
+log "Starting Minr.online Python Miner installation for macOS"
 
-# Check for Homebrew
-if ! command -v brew &> /dev/null; then
-    log "Homebrew not found. Installing Homebrew..."
-    update_status "installing" "Installing Homebrew..." 10
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+update_status "installing" "Checking Python..." 20
+
+# Check for Python 3
+if ! command -v python3 &> /dev/null; then
+    log "Python 3 not found. Checking for Homebrew..."
     
-    # Add Homebrew to PATH for Apple Silicon Macs
-    if [[ -f /opt/homebrew/bin/brew ]]; then
-        eval "$(/opt/homebrew/bin/brew shellenv)"
+    # Check for Homebrew
+    if ! command -v brew &> /dev/null; then
+        log "Homebrew not found. Installing Homebrew..."
+        update_status "installing" "Installing Homebrew..." 30
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
+            log "Error installing Homebrew"
+            update_status "error" "Failed to install Homebrew" 0
+            exit 1
+        }
+        
+        # Add Homebrew to PATH for Apple Silicon Macs
+        if [[ -f /opt/homebrew/bin/brew ]]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+        fi
     fi
+    
+    log "Installing Python 3..."
+    update_status "installing" "Installing Python 3..." 40
+    brew install python3 || {
+        log "Error installing Python 3"
+        update_status "error" "Failed to install Python 3" 0
+        exit 1
+    }
 else
-    log "Homebrew found"
+    log "Python 3 found: $(python3 --version)"
 fi
 
-update_status "installing" "Installing dependencies..." 30
+update_status "installing" "Downloading miner script..." 60
 
-# Install dependencies
-log "Installing build dependencies..."
-brew install automake autoconf pkg-config curl openssl jansson gmp || {
-    log "Error installing dependencies"
-    update_status "error" "Failed to install dependencies" 0
+# Download Python miner script from API
+MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
+log "Fetching miner script..."
+curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/cpu-miner-launcher/script" > "$MINER_SCRIPT" || {
+    log "Error downloading miner script"
+    update_status "error" "Failed to download miner script" 0
     exit 1
 }
 
-update_status "installing" "Downloading cpuminer..." 50
+chmod +x "$MINER_SCRIPT"
 
-# Clone cpuminer
-CPUMINER_DIR="$INSTALL_DIR/cpuminer"
-if [ ! -d "$CPUMINER_DIR" ]; then
-    log "Cloning cpuminer repository..."
-    git clone https://github.com/pooler/cpuminer.git "$CPUMINER_DIR" || {
-        log "Error cloning cpuminer"
-        update_status "error" "Failed to clone cpuminer" 0
-        exit 1
-    }
-else
-    log "cpuminer directory exists, updating..."
-    cd "$CPUMINER_DIR"
-    git pull || true
-fi
-
-update_status "installing" "Building cpuminer..." 70
-
-# Build cpuminer with automatic retry and cleanup
-cd "$CPUMINER_DIR"
-log "Building cpuminer..."
-
-# Set environment variables for curl (Homebrew keg-only) - set once at the start
-export PKG_CONFIG_PATH="/opt/homebrew/opt/curl/lib/pkgconfig:$PKG_CONFIG_PATH"
-export LDFLAGS="-L/opt/homebrew/opt/curl/lib $LDFLAGS"
-export CPPFLAGS="-I/opt/homebrew/opt/curl/include $CPPFLAGS"
-
-# Function to build cpuminer (can be called multiple times if needed)
-build_cpuminer() {
-    # Clean any previous failed build artifacts
-    make clean 2>/dev/null || true
-    make distclean 2>/dev/null || true
-    
-    # Fix broken configure.ac libcurl check before running autogen/autoreconf
-    if [ -f "configure.ac" ]; then
-        log "Patching configure.ac to fix libcurl check..."
-        # Backup original file
-        cp configure.ac configure.ac.bak
-        
-        # The broken macro spans multiple lines:
-        # Line 123: LIBCURL_CHECK_CONFIG(, 7.15.2, , [
-        # Line 124:   [AC_MSG_ERROR([Missing required libcurl >= 7.15.2])])
-        # Line 125: )
-        # We need to fix it to: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [AC_MSG_ERROR([Missing required libcurl >= 7.15.2])])
-        # Use perl for reliable multi-line replacement
-        if command -v perl >/dev/null 2>&1; then
-            # Read entire file and fix the multi-line macro
-            perl -i -0777 -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,\s*\[\s*\[AC_MSG_ERROR\(\[Missing required libcurl >= 7\.15\.2\]\)\]\)\s*\)/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [AC_MSG_ERROR([Missing required libcurl >= 7.15.2])])/gs' configure.ac 2>/dev/null || \
-            # Fallback: just fix the opening line if multi-line match fails
-            perl -i -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,/LIBCURL_CHECK_CONFIG([], [7.15.2], [],/g' configure.ac 2>/dev/null || true
-        else
-            # Fallback to sed - fix just the opening line
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [],/g' configure.ac 2>/dev/null || true
-            else
-                sed -i 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [],/g' configure.ac 2>/dev/null || true
-            fi
-        fi
-        
-        # Verify the patch worked - check if the file still has the macro and is valid
-        if ! grep -q "LIBCURL_CHECK_CONFIG" configure.ac 2>/dev/null; then
-            log "Warning: configure.ac patch removed macro, restoring backup..."
-            mv configure.ac.bak configure.ac 2>/dev/null || true
-        elif grep -q "LIBCURL_CHECK_CONFIG(, 7" configure.ac 2>/dev/null; then
-            log "Warning: configure.ac patch may not have worked, but continuing..."
-        fi
-    fi
-    
-    # Try autogen.sh first, fall back to autoreconf if it fails (newer autoconf compatibility)
-    if ! ./autogen.sh 2>&1; then
-        log "autogen.sh failed, trying autoreconf instead..."
-        autoreconf -fiv || {
-            log "Error running autoreconf"
-            return 1
-        }
-    fi
-    
-    # Run configure with curl environment variables and explicit curl flags
-    # Use pkg-config to find curl if available, otherwise use explicit paths
-    CURL_CFLAGS=""
-    CURL_LIBS=""
-    if pkg-config --exists libcurl 2>/dev/null; then
-        CURL_CFLAGS=$(pkg-config --cflags libcurl)
-        CURL_LIBS=$(pkg-config --libs libcurl)
-    else
-        # Fallback to explicit Homebrew paths
-        CURL_CFLAGS="-I/opt/homebrew/opt/curl/include"
-        CURL_LIBS="-L/opt/homebrew/opt/curl/lib -lcurl"
-    fi
-    
-    ./configure CFLAGS="-O3 $CURL_CFLAGS" LIBS="$CURL_LIBS" || {
-        log "Configure failed - trying with explicit curl detection disabled..."
-        # Last resort: configure without curl check (miner will use HTTP API instead)
-        ./configure CFLAGS="-O3" --disable-libcurl || {
-            log "Configure failed completely"
-            return 1
-        }
-    }
-    
-    # Build
-    make -j$(sysctl -n hw.ncpu) || {
-        log "Make failed"
-        return 1
-    }
-    
-    return 0
-}
-
-# Try building - if it fails, clean everything and retry once
-if ! build_cpuminer; then
-    log "First build attempt failed. Cleaning and retrying..."
-    cd "$INSTALL_DIR"
-    rm -rf "$CPUMINER_DIR"
-    git clone https://github.com/pooler/cpuminer.git "$CPUMINER_DIR" || {
-        log "Error cloning cpuminer repository"
-        update_status "error" "Failed to clone repository" 0
-        exit 1
-    }
-    cd "$CPUMINER_DIR"
-    
-    if ! build_cpuminer; then
-        log "Build failed after retry"
-        update_status "error" "Build failed" 0
-        exit 1
-    fi
-fi
-
-log "cpuminer built successfully!"
-
-update_status "installing" "Fetching configuration..." 85
+update_status "installing" "Fetching configuration..." 80
 
 # Fetch configuration from API
 log "Fetching miner configuration..."
@@ -929,27 +807,47 @@ curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/miner-config" > "$C
     exit 1
 }
 
+# Parse config to get values for Python script
+STRATUM_HOST=$(cat "$CONFIG_FILE" | grep -o '"host": "[^"]*"' | cut -d'"' -f4)
+STRATUM_PORT=$(cat "$CONFIG_FILE" | grep -o '"port": [0-9]*' | grep -o '[0-9]*')
+WALLET=$(cat "$CONFIG_FILE" | grep -o '"wallet": "[^"]*"' | cut -d'"' -f4)
+WORKER=$(cat "$CONFIG_FILE" | grep -o '"worker": "[^"]*"' | cut -d'"' -f4)
+USER_EMAIL=$(cat "$CONFIG_FILE" | grep -o '"user_email": "[^"]*"' | cut -d'"' -f4 || echo "user")
+
+# Replace placeholders in Python script
+log "Configuring miner script..."
+sed -i '' "s|{{USER_EMAIL}}|$USER_EMAIL|g" "$MINER_SCRIPT" 2>/dev/null || \
+sed -i "s|{{USER_EMAIL}}|$USER_EMAIL|g" "$MINER_SCRIPT"
+sed -i '' "s|{{BTC_WALLET}}|$WALLET|g" "$MINER_SCRIPT" 2>/dev/null || \
+sed -i "s|{{BTC_WALLET}}|$WALLET|g" "$MINER_SCRIPT"
+sed -i '' "s|{{STRATUM_HOST}}|$STRATUM_HOST|g" "$MINER_SCRIPT" 2>/dev/null || \
+sed -i "s|{{STRATUM_HOST}}|$STRATUM_HOST|g" "$MINER_SCRIPT"
+sed -i '' "s|{{STRATUM_PORT}}|$STRATUM_PORT|g" "$MINER_SCRIPT" 2>/dev/null || \
+sed -i "s|{{STRATUM_PORT}}|$STRATUM_PORT|g" "$MINER_SCRIPT"
+sed -i '' "s|{{WORKER_NAME}}|$WORKER|g" "$MINER_SCRIPT" 2>/dev/null || \
+sed -i "s|{{WORKER_NAME}}|$WORKER|g" "$MINER_SCRIPT"
+sed -i '' "s|{{API_URL}}|$API_URL|g" "$MINER_SCRIPT" 2>/dev/null || \
+sed -i "s|{{API_URL}}|$API_URL|g" "$MINER_SCRIPT"
+sed -i '' "s|{{AUTH_TOKEN}}|$AUTH_TOKEN|g" "$MINER_SCRIPT" 2>/dev/null || \
+sed -i "s|{{AUTH_TOKEN}}|$AUTH_TOKEN|g" "$MINER_SCRIPT"
+
 # Create launcher script
 LAUNCHER_SCRIPT="$INSTALL_DIR/start-mining.sh"
 cat > "$LAUNCHER_SCRIPT" << 'EOF'
 #!/bin/bash
 INSTALL_DIR="$HOME/.minr-online"
-CONFIG_FILE="$INSTALL_DIR/config.json"
-CPUMINER="$INSTALL_DIR/cpuminer/minerd"
+MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
 
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Configuration file not found. Please run install script again."
+if [ ! -f "$MINER_SCRIPT" ]; then
+    echo "Error: Miner script not found. Please run install script again."
     exit 1
 fi
 
-# Parse config
-STRATUM_HOST=$(cat "$CONFIG_FILE" | grep -o '"host": "[^"]*"' | cut -d'"' -f4)
-STRATUM_PORT=$(cat "$CONFIG_FILE" | grep -o '"port": [0-9]*' | grep -o '[0-9]*')
-WALLET=$(cat "$CONFIG_FILE" | grep -o '"wallet": "[^"]*"' | cut -d'"' -f4)
-WORKER=$(cat "$CONFIG_FILE" | grep -o '"worker": "[^"]*"' | cut -d'"' -f4)
+# Get number of CPU cores for threading
+CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 1)
 
-# Start mining
-"$CPUMINER" -a sha256d -o "stratum+tcp://$STRATUM_HOST:$STRATUM_PORT" -u "$WALLET.$WORKER" -p x
+# Start mining with all CPU cores
+python3 "$MINER_SCRIPT" "$CORES"
 EOF
 
 chmod +x "$LAUNCHER_SCRIPT"
@@ -964,14 +862,16 @@ echo "=========================================="
 echo ""
 echo "Miner installed to: $INSTALL_DIR"
 echo "Start mining with: $LAUNCHER_SCRIPT"
+echo ""
+echo "Or run directly: python3 $MINER_SCRIPT"
 echo ""
 `;
 }
 
 function generateLinuxInstallScript(authToken: string, apiUrl: string): string {
   return `#!/bin/bash
-# Minr.online CPU Miner Installer for Linux
-# This script installs dependencies and sets up cpuminer
+# Minr.online Python Miner Installer for Linux
+# Simple installation - no C build required!
 
 set -e
 
@@ -992,163 +892,69 @@ update_status() {
     echo "{\\"status\\": \\"$1\\", \\"step\\": \\"$2\\", \\"progress\\": $3}" > "$STATUS_FILE"
 }
 
-log "Starting Minr.online CPU Miner installation for Linux"
+log "Starting Minr.online Python Miner installation for Linux"
 
-# Detect Linux distribution
-if [ -f /etc/debian_version ]; then
-    DISTRO="debian"
-elif [ -f /etc/redhat-release ]; then
-    DISTRO="redhat"
-elif [ -f /etc/arch-release ]; then
-    DISTRO="arch"
-else
-    DISTRO="unknown"
-fi
+update_status "installing" "Checking Python..." 20
 
-log "Detected distribution: $DISTRO"
-
-update_status "installing" "Installing dependencies..." 20
-
-# Install dependencies based on distribution
-if [ "$DISTRO" = "debian" ]; then
-    log "Installing dependencies via apt..."
-    sudo apt-get update
-    sudo apt-get install -y build-essential libcurl4-openssl-dev libjansson-dev libssl-dev libgmp-dev automake autoconf pkg-config git || {
-        log "Error installing dependencies"
-        update_status "error" "Failed to install dependencies" 0
-        exit 1
-    }
-elif [ "$DISTRO" = "redhat" ]; then
-    log "Installing dependencies via yum/dnf..."
-    if command -v dnf &> /dev/null; then
-        sudo dnf install -y gcc make automake autoconf pkg-config libcurl-devel jansson-devel openssl-devel gmp-devel git || {
-            log "Error installing dependencies"
-            update_status "error" "Failed to install dependencies" 0
+# Check for Python 3
+if ! command -v python3 &> /dev/null; then
+    log "Python 3 not found. Installing Python 3..."
+    update_status "installing" "Installing Python 3..." 30
+    
+    # Detect Linux distribution
+    if [ -f /etc/debian_version ]; then
+        DISTRO="debian"
+        sudo apt-get update
+        sudo apt-get install -y python3 python3-pip || {
+            log "Error installing Python 3"
+            update_status "error" "Failed to install Python 3" 0
+            exit 1
+        }
+    elif [ -f /etc/redhat-release ]; then
+        DISTRO="redhat"
+        if command -v dnf &> /dev/null; then
+            sudo dnf install -y python3 python3-pip || {
+                log "Error installing Python 3"
+                update_status "error" "Failed to install Python 3" 0
+                exit 1
+            }
+        else
+            sudo yum install -y python3 python3-pip || {
+                log "Error installing Python 3"
+                update_status "error" "Failed to install Python 3" 0
+                exit 1
+            }
+        fi
+    elif [ -f /etc/arch-release ]; then
+        DISTRO="arch"
+        sudo pacman -S --noconfirm python python-pip || {
+            log "Error installing Python 3"
+            update_status "error" "Failed to install Python 3" 0
             exit 1
         }
     else
-        sudo yum install -y gcc make automake autoconf pkgconfig libcurl-devel jansson-devel openssl-devel gmp-devel git || {
-            log "Error installing dependencies"
-            update_status "error" "Failed to install dependencies" 0
-            exit 1
-        }
-    fi
-elif [ "$DISTRO" = "arch" ]; then
-    log "Installing dependencies via pacman..."
-    sudo pacman -S --noconfirm base-devel curl jansson openssl gmp git || {
-        log "Error installing dependencies"
-        update_status "error" "Failed to install dependencies" 0
+        log "Unknown distribution. Please install Python 3 manually."
+        update_status "error" "Unknown distribution - install Python 3 manually" 0
         exit 1
-    }
+    fi
 else
-    log "Unknown distribution. Please install dependencies manually:"
-    log "  build-essential, libcurl4-openssl-dev, libjansson-dev, libssl-dev, libgmp-dev, automake, autoconf, pkg-config, git"
-    update_status "error" "Unknown distribution" 0
+    log "Python 3 found: $(python3 --version)"
+fi
+
+update_status "installing" "Downloading miner script..." 60
+
+# Download Python miner script from API
+MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
+log "Fetching miner script..."
+curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/cpu-miner-launcher/script" > "$MINER_SCRIPT" || {
+    log "Error downloading miner script"
+    update_status "error" "Failed to download miner script" 0
     exit 1
-fi
-
-update_status "installing" "Downloading cpuminer..." 50
-
-# Clone cpuminer
-CPUMINER_DIR="$INSTALL_DIR/cpuminer"
-if [ ! -d "$CPUMINER_DIR" ]; then
-    log "Cloning cpuminer repository..."
-    git clone https://github.com/pooler/cpuminer.git "$CPUMINER_DIR" || {
-        log "Error cloning cpuminer"
-        update_status "error" "Failed to clone cpuminer" 0
-        exit 1
-    }
-else
-    log "cpuminer directory exists, updating..."
-    cd "$CPUMINER_DIR"
-    git pull || true
-fi
-
-update_status "installing" "Building cpuminer..." 70
-
-# Build cpuminer with automatic retry and cleanup
-cd "$CPUMINER_DIR"
-log "Building cpuminer..."
-
-# Set environment variables for curl (Linux - may vary by distro)
-# Try to detect curl pkg-config path
-if [ -d "/usr/lib/x86_64-linux-gnu/pkgconfig" ]; then
-    export PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
-fi
-if [ -d "/usr/lib64/pkgconfig" ]; then
-    export PKG_CONFIG_PATH="/usr/lib64/pkgconfig:$PKG_CONFIG_PATH"
-fi
-
-# Function to build cpuminer (can be called multiple times if needed)
-build_cpuminer() {
-    # Clean any previous failed build artifacts
-    make clean 2>/dev/null || true
-    make distclean 2>/dev/null || true
-    
-    # Fix broken configure.ac libcurl check before running autogen/autoreconf
-    if [ -f "configure.ac" ]; then
-        log "Patching configure.ac to fix libcurl check..."
-        # Fix the broken LIBCURL_CHECK_CONFIG macro call
-        sed -i 's/LIBCURL_CHECK_CONFIG(, 7.15.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [/g' configure.ac 2>/dev/null || true
-    fi
-    
-    # Try autogen.sh first, fall back to autoreconf if it fails
-    if ! ./autogen.sh 2>&1; then
-        log "autogen.sh failed, trying autoreconf instead..."
-        autoreconf -fiv || {
-            log "Error running autoreconf"
-            return 1
-        }
-    fi
-    
-    # Run configure with curl detection
-    # Use pkg-config to find curl if available
-    CURL_CFLAGS=""
-    CURL_LIBS=""
-    if pkg-config --exists libcurl 2>/dev/null; then
-        CURL_CFLAGS=$(pkg-config --cflags libcurl)
-        CURL_LIBS=$(pkg-config --libs libcurl)
-    fi
-    
-    ./configure CFLAGS="-O3 $CURL_CFLAGS" LIBS="$CURL_LIBS" || {
-        log "Configure failed - trying without curl..."
-        ./configure CFLAGS="-O3" --disable-libcurl || {
-            log "Configure failed completely"
-            return 1
-        }
-    }
-    
-    # Build
-    make -j$(nproc) || {
-        log "Make failed"
-        return 1
-    }
-    
-    return 0
 }
 
-# Try building - if it fails, clean everything and retry once
-if ! build_cpuminer; then
-    log "First build attempt failed. Cleaning and retrying..."
-    cd "$INSTALL_DIR"
-    rm -rf "$CPUMINER_DIR"
-    git clone https://github.com/pooler/cpuminer.git "$CPUMINER_DIR" || {
-        log "Error cloning cpuminer repository"
-        update_status "error" "Failed to clone repository" 0
-        exit 1
-    }
-    cd "$CPUMINER_DIR"
-    
-    if ! build_cpuminer; then
-        log "Build failed after retry"
-        update_status "error" "Build failed" 0
-        exit 1
-    fi
-fi
+chmod +x "$MINER_SCRIPT"
 
-log "cpuminer built successfully!"
-
-update_status "installing" "Fetching configuration..." 85
+update_status "installing" "Fetching configuration..." 80
 
 # Fetch configuration from API
 log "Fetching miner configuration..."
@@ -1159,27 +965,40 @@ curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/miner-config" > "$C
     exit 1
 }
 
+# Parse config to get values for Python script
+STRATUM_HOST=$(cat "$CONFIG_FILE" | grep -o '"host": "[^"]*"' | cut -d'"' -f4)
+STRATUM_PORT=$(cat "$CONFIG_FILE" | grep -o '"port": [0-9]*' | grep -o '[0-9]*')
+WALLET=$(cat "$CONFIG_FILE" | grep -o '"wallet": "[^"]*"' | cut -d'"' -f4)
+WORKER=$(cat "$CONFIG_FILE" | grep -o '"worker": "[^"]*"' | cut -d'"' -f4)
+USER_EMAIL=$(cat "$CONFIG_FILE" | grep -o '"user_email": "[^"]*"' | cut -d'"' -f4 || cat "$CONFIG_FILE" | grep -o '"user": "[^"]*"' | cut -d'"' -f4 || echo "user")
+
+# Replace placeholders in Python script
+log "Configuring miner script..."
+sed -i "s|{{USER_EMAIL}}|$USER_EMAIL|g" "$MINER_SCRIPT"
+sed -i "s|{{BTC_WALLET}}|$WALLET|g" "$MINER_SCRIPT"
+sed -i "s|{{STRATUM_HOST}}|$STRATUM_HOST|g" "$MINER_SCRIPT"
+sed -i "s|{{STRATUM_PORT}}|$STRATUM_PORT|g" "$MINER_SCRIPT"
+sed -i "s|{{WORKER_NAME}}|$WORKER|g" "$MINER_SCRIPT"
+sed -i "s|{{API_URL}}|$API_URL|g" "$MINER_SCRIPT"
+sed -i "s|{{AUTH_TOKEN}}|$AUTH_TOKEN|g" "$MINER_SCRIPT"
+
 # Create launcher script
 LAUNCHER_SCRIPT="$INSTALL_DIR/start-mining.sh"
 cat > "$LAUNCHER_SCRIPT" << 'EOF'
 #!/bin/bash
 INSTALL_DIR="$HOME/.minr-online"
-CONFIG_FILE="$INSTALL_DIR/config.json"
-CPUMINER="$INSTALL_DIR/cpuminer/minerd"
+MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
 
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Configuration file not found. Please run install script again."
+if [ ! -f "$MINER_SCRIPT" ]; then
+    echo "Error: Miner script not found. Please run install script again."
     exit 1
 fi
 
-# Parse config
-STRATUM_HOST=$(cat "$CONFIG_FILE" | grep -o '"host": "[^"]*"' | cut -d'"' -f4)
-STRATUM_PORT=$(cat "$CONFIG_FILE" | grep -o '"port": [0-9]*' | grep -o '[0-9]*')
-WALLET=$(cat "$CONFIG_FILE" | grep -o '"wallet": "[^"]*"' | cut -d'"' -f4)
-WORKER=$(cat "$CONFIG_FILE" | grep -o '"worker": "[^"]*"' | cut -d'"' -f4)
+# Get number of CPU cores for threading
+CORES=$(nproc 2>/dev/null || echo 1)
 
-# Start mining
-"$CPUMINER" -a sha256d -o "stratum+tcp://$STRATUM_HOST:$STRATUM_PORT" -u "$WALLET.$WORKER" -p x
+# Start mining with all CPU cores
+python3 "$MINER_SCRIPT" "$CORES"
 EOF
 
 chmod +x "$LAUNCHER_SCRIPT"
@@ -1195,12 +1014,14 @@ echo ""
 echo "Miner installed to: $INSTALL_DIR"
 echo "Start mining with: $LAUNCHER_SCRIPT"
 echo ""
+echo "Or run directly: python3 $MINER_SCRIPT"
+echo ""
 `;
 }
 
 function generateWindowsInstallScript(authToken: string, apiUrl: string): string {
-  return `# Minr.online CPU Miner Installer for Windows
-# PowerShell script to install dependencies and set up cpuminer
+  return `# Minr.online Python Miner Installer for Windows
+# Simple installation - no C build required!
 
 $ErrorActionPreference = "Stop"
 
@@ -1230,73 +1051,63 @@ function Update-Status {
     Set-Content -Path $STATUS_FILE -Value $statusObj
 }
 
-Write-Log "Starting Minr.online CPU Miner installation for Windows"
+Write-Log "Starting Minr.online Python Miner installation for Windows"
 
-# Check for Chocolatey
-if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-    Write-Log "Chocolatey not found. Installing Chocolatey..."
-    Update-Status "installing" "Installing Chocolatey..." 10
-    Set-ExecutionPolicy Bypass -Scope Process -Force
-    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-    iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+Update-Status "installing" "Checking Python..." 20
+
+# Check for Python 3
+if (-not (Get-Command python -ErrorAction SilentlyContinue) -and -not (Get-Command python3 -ErrorAction SilentlyContinue)) {
+    Write-Log "Python 3 not found. Installing Python 3..."
+    Update-Status "installing" "Installing Python 3..." 30
     
-    # Refresh environment
+    # Check for Chocolatey
+    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+        Write-Log "Chocolatey not found. Installing Chocolatey..."
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        
+        # Refresh environment
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    }
+    
+    # Install Python via Chocolatey
+    choco install -y python3 --ignore-checksums
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "Error installing Python 3"
+        Update-Status "error" "Failed to install Python 3" 0
+        exit 1
+    }
+    
+    # Refresh environment again
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 } else {
-    Write-Log "Chocolatey found"
+    $pythonCmd = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "python3" }
+    $pythonVersion = & $pythonCmd --version
+    Write-Log "Python found: $pythonVersion"
 }
 
-Update-Status "installing" "Installing dependencies..." 30
+Update-Status "installing" "Downloading miner script..." 60
 
-# Install dependencies via Chocolatey
-Write-Log "Installing build dependencies..."
-choco install -y git make mingw autoconf automake libtool --ignore-checksums || {
-    Write-Log "Error installing dependencies"
-    Update-Status "error" "Failed to install dependencies" 0
+# Download Python miner script from API
+$MINER_SCRIPT = "$INSTALL_DIR\\minr-stratum-miner.py"
+Write-Log "Fetching miner script..."
+$headers = @{
+    "Authorization" = "Bearer $AUTH_TOKEN"
+}
+try {
+    Invoke-WebRequest -Uri "$API_URL/api/cpu-miner-launcher/script" -Headers $headers -OutFile $MINER_SCRIPT
+} catch {
+    Write-Log "Error downloading miner script: $_"
+    Update-Status "error" "Failed to download miner script" 0
     exit 1
 }
 
-Update-Status "installing" "Downloading cpuminer..." 50
-
-# Clone cpuminer
-$CPUMINER_DIR = "$INSTALL_DIR\\cpuminer"
-if (-not (Test-Path $CPUMINER_DIR)) {
-    Write-Log "Cloning cpuminer repository..."
-    git clone https://github.com/pooler/cpuminer.git $CPUMINER_DIR
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "Error cloning cpuminer"
-        Update-Status "error" "Failed to clone cpuminer" 0
-        exit 1
-    }
-} else {
-    Write-Log "cpuminer directory exists, updating..."
-    Set-Location $CPUMINER_DIR
-    git pull
-}
-
-Update-Status "installing" "Building cpuminer..." 70
-
-# Build cpuminer (Windows build is more complex)
-Set-Location $CPUMINER_DIR
-Write-Log "Building cpuminer..."
-Write-Log "Note: Windows builds may require Visual Studio or MinGW setup"
-Write-Log "For best results, consider using WSL2 or pre-built binaries"
-
-# Try to build (may fail on Windows without proper setup)
-./autogen.sh
-if ($LASTEXITCODE -ne 0) {
-    Write-Log "Warning: autogen.sh failed. You may need to build manually or use WSL2"
-    Write-Log "Alternatively, download a pre-built Windows binary"
-}
-
-Update-Status "installing" "Fetching configuration..." 85
+Update-Status "installing" "Fetching configuration..." 80
 
 # Fetch configuration from API
 Write-Log "Fetching miner configuration..."
 $CONFIG_FILE = "$INSTALL_DIR\\config.json"
-$headers = @{
-    "Authorization" = "Bearer $AUTH_TOKEN"
-}
 try {
     Invoke-WebRequest -Uri "$API_URL/api/miner-config" -Headers $headers -OutFile $CONFIG_FILE
 } catch {
@@ -1305,27 +1116,43 @@ try {
     exit 1
 }
 
-# Create launcher script
-$LAUNCHER_SCRIPT = "$INSTALL_DIR\\start-mining.ps1"
-$launcherContent = '# Minr.online CPU Miner Launcher
-$INSTALL_DIR = "$env:USERPROFILE\.minr-online"
-$CONFIG_FILE = "$INSTALL_DIR\config.json"
-$CPUMINER = "$INSTALL_DIR\cpuminer\minerd.exe"
-
-if (-not (Test-Path $CONFIG_FILE)) {
-    Write-Host "Error: Configuration file not found. Please run install script again."
-    exit 1
-}
-
-# Parse config (simplified - would use proper JSON parsing in production)
+# Parse config to get values for Python script
 $config = Get-Content $CONFIG_FILE | ConvertFrom-Json
 $stratumHost = $config.stratum.host
 $stratumPort = $config.stratum.port
 $wallet = $config.wallet
 $worker = $config.worker
+$userEmail = if ($config.user_email) { $config.user_email } elseif ($config.user) { $config.user } else { "user" }
 
-# Start mining
-& $CPUMINER -a sha256d -o "stratum+tcp://$stratumHost:$stratumPort" -u "$wallet.$worker" -p x'
+# Replace placeholders in Python script
+Write-Log "Configuring miner script..."
+$scriptContent = Get-Content $MINER_SCRIPT -Raw
+$scriptContent = $scriptContent -replace "{{USER_EMAIL}}", $userEmail
+$scriptContent = $scriptContent -replace "{{BTC_WALLET}}", $wallet
+$scriptContent = $scriptContent -replace "{{STRATUM_HOST}}", $stratumHost
+$scriptContent = $scriptContent -replace "{{STRATUM_PORT}}", $stratumPort
+$scriptContent = $scriptContent -replace "{{WORKER_NAME}}", $worker
+$scriptContent = $scriptContent -replace "{{API_URL}}", $API_URL
+$scriptContent = $scriptContent -replace "{{AUTH_TOKEN}}", $AUTH_TOKEN
+Set-Content -Path $MINER_SCRIPT -Value $scriptContent
+
+# Create launcher script
+$LAUNCHER_SCRIPT = "$INSTALL_DIR\\start-mining.ps1"
+$pythonCmd = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "python3" }
+$launcherContent = '# Minr.online Python Miner Launcher
+$INSTALL_DIR = "$env:USERPROFILE\.minr-online"
+$MINER_SCRIPT = "$INSTALL_DIR\minr-stratum-miner.py"
+
+if (-not (Test-Path $MINER_SCRIPT)) {
+    Write-Host "Error: Miner script not found. Please run install script again."
+    exit 1
+}
+
+# Get number of CPU cores
+$cores = (Get-WmiObject Win32_ComputerSystem).NumberOfLogicalProcessors
+
+# Start mining with all CPU cores
+& ' + $pythonCmd + ' $MINER_SCRIPT $cores'
 
 Set-Content -Path $LAUNCHER_SCRIPT -Value $launcherContent
 
@@ -1340,8 +1167,7 @@ Write-Host ""
 Write-Host "Miner installed to: $INSTALL_DIR"
 Write-Host "Start mining with: $LAUNCHER_SCRIPT"
 Write-Host ""
-Write-Host "Note: Windows builds may require additional setup."
-Write-Host "Consider using WSL2 for easier building."
+Write-Host "Or run directly: $pythonCmd $MINER_SCRIPT"
 Write-Host ""
 `;
 }
