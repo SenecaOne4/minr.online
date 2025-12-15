@@ -587,18 +587,19 @@ fi\`;
           
           // Create PowerShell launcher that opens PowerShell and runs install
           // The install script is already embedded in the HTML, so we just need to write it
-          // Escape the embedded script for PowerShell here-string
-          const escapedWindowsScript = EMBEDDED_SCRIPTS.windows.replace(/`/g, '``').replace(/\$/g, '`$');
-          const launcherScript = \`# Minr.online Auto-Launcher for Windows
-\\$scriptDir = Split-Path -Parent \\$MyInvocation.MyCommand.Path
-Set-Location \\$scriptDir
-
-# Write embedded install script to file (script content is embedded in HTML)
-\\$installScript = @"
-\${escapedWindowsScript}
-"@
-Set-Content -Path "install-minr-miner.ps1" -Value \\$installScript
-Start-Process powershell -ArgumentList "-NoExit", "-File", "install-minr-miner.ps1"\`;
+          // Escape the embedded script for PowerShell here-string (escape backticks and $)
+          const windowsScript = EMBEDDED_SCRIPTS.windows;
+          const escapedWindowsScript = windowsScript.replace(/`/g, '``').replace(/\$/g, '`$');
+          const launcherScript = '# Minr.online Auto-Launcher for Windows\n' +
+            '\\$scriptDir = Split-Path -Parent \\$MyInvocation.MyCommand.Path\n' +
+            'Set-Location \\$scriptDir\n' +
+            '\n' +
+            '# Write embedded install script to file (script content is embedded in HTML)\n' +
+            '\\$installScript = @"\n' +
+            escapedWindowsScript + '\n' +
+            '"@\n' +
+            'Set-Content -Path "install-minr-miner.ps1" -Value \\$installScript\n' +
+            'Start-Process powershell -ArgumentList "-NoExit", "-File", "install-minr-miner.ps1"';
           
           const launcherBlob = new Blob([launcherScript], { type: 'application/x-powershell' });
           const launcherUrl = URL.createObjectURL(launcherBlob);
