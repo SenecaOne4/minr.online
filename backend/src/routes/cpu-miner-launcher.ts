@@ -501,17 +501,14 @@ if [ -f "install-minr-miner.sh" ]; then
     # Open Terminal and run the install script using AppleScript
     # Write AppleScript to temp file to avoid escaping issues
     TEMP_SCRIPT="\\$SCRIPT_DIR/.temp-launcher.applescript"
-    cat > "\\$TEMP_SCRIPT" <<'EOF'
+    cat > "\\$TEMP_SCRIPT" <<EOF
 tell application "Terminal"
     activate
-    set scriptDir to POSIX file "$SCRIPT_DIR"
-    set scriptDirPath to POSIX path of (scriptDir as alias)'s container
-    set cmd to "cd " & quoted form of scriptDirPath & " && /bin/bash ./install-minr-miner.sh"
+    set scriptDir to "\\$SCRIPT_DIR"
+    set cmd to "cd " & quoted form of scriptDir & " && /bin/bash ./install-minr-miner.sh"
     do script cmd
 end tell
 EOF
-    # Substitute SCRIPT_DIR variable in the temp script
-    sed -i '' "s|\\$SCRIPT_DIR|\\$SCRIPT_DIR|g" "\\$TEMP_SCRIPT"
     osascript "\\$TEMP_SCRIPT"
     rm -f "\\$TEMP_SCRIPT"
 else
