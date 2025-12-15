@@ -77,27 +77,43 @@ export default function HeroSection({ settings }: HeroSectionProps) {
         return;
       }
       
+      // Log input values for debugging (without exposing password)
+      console.log('Password login attempt:', { 
+        email: trimmedEmail, 
+        emailLength: trimmedEmail.length,
+        passwordLength: password.length,
+        hasPassword: !!password,
+        userAgent: navigator.userAgent 
+      });
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: trimmedEmail,
-        password: password,
+        email: trimmedEmail.toLowerCase(), // Normalize email to lowercase
+        password: password.trim(), // Trim password whitespace
       });
 
       if (error) {
         // Log the full error for debugging
-        console.error('Password login error:', error);
+        console.error('Password login error:', {
+          message: error.message,
+          status: error.status,
+          code: error.code,
+          name: error.name,
+          fullError: JSON.stringify(error, null, 2)
+        });
         
         // More detailed error handling
-        const errorMsg = error.message.toLowerCase();
+        const errorMsg = (error.message || '').toLowerCase();
         const errorCode = error.status || error.code || '';
+        const errorName = error.name || '';
         
         // Handle specific Supabase error codes
-        if (errorCode === 400 || errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid') || errorMsg.includes('email')) {
+        if (errorCode === 400 || errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid') || errorMsg.includes('email') || errorMsg.includes('credential')) {
           setMessage('Error: Invalid email or password. If you haven\'t set a password yet, please use "Magic Link" login first, then set a password in your profile settings.');
         } else if (errorMsg.includes('email not confirmed') || errorMsg.includes('not confirmed') || errorCode === 'email_not_confirmed') {
           setMessage('Error: Please confirm your email first. Check your inbox for a confirmation link, or use Magic Link login.');
         } else if (errorMsg.includes('user not found') || errorCode === 'user_not_found') {
           setMessage('Error: No account found with this email. Please sign up first using Magic Link login.');
-        } else if (errorMsg.includes('password') || errorCode === 'invalid_credentials') {
+        } else if (errorMsg.includes('password') || errorCode === 'invalid_credentials' || errorName === 'AuthApiError') {
           setMessage('Error: Password authentication failed. Make sure you have set a password in your profile settings, or use Magic Link login.');
         } else {
           setMessage(`Error: ${error.message || 'Authentication failed'}. Try using Magic Link login instead.`);
