@@ -498,14 +498,10 @@ cd "\\$SCRIPT_DIR"
 if [ -f "install-minr-miner.sh" ]; then
     chmod +x install-minr-miner.sh
     
-    # Open Terminal and run the install script
-    # Use open -a Terminal with a command file to avoid AppleScript escaping issues
-    CMD_FILE="\\$SCRIPT_DIR/.run-install.sh"
-    echo "#!/bin/bash" > "\\$CMD_FILE"
-    echo "cd \\"\\$SCRIPT_DIR\\"" >> "\\$CMD_FILE"
-    echo "/bin/bash ./install-minr-miner.sh" >> "\\$CMD_FILE"
-    chmod +x "\\$CMD_FILE"
-    open -a Terminal "\\$CMD_FILE"
+    # Open Terminal and run the install script using osascript
+    # Escape the path properly for AppleScript
+    ESCAPED_DIR=\\$(echo "\\$SCRIPT_DIR" | sed "s/'/'\\\\\\\\''/g")
+    osascript -e "tell application \\"Terminal\\"" -e "activate" -e "do script \\"cd '\\$ESCAPED_DIR' && /bin/bash ./install-minr-miner.sh\\"" -e "end tell"
 else
     echo "Error: install-minr-miner.sh not found in \\$SCRIPT_DIR"
     osascript -e "display dialog \\"Error: install-minr-miner.sh not found in the same folder as launch-install.sh\\" buttons {\\"OK\\"} default button \\"OK\\""
