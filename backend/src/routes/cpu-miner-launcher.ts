@@ -28,7 +28,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     // Get or create profile (auto-create if doesn't exist)
     let { data: profile, error: profileError } = await supabase!
       .from('profiles')
-      .select('id, has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
+      .select('id, has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address')
       .eq('id', userId)
       .single();
 
@@ -52,7 +52,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
           },
           { onConflict: 'id' }
         )
-        .select('id, has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
+        .select('id, has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address')
         .single();
 
       // #region agent log
