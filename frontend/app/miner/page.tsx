@@ -199,6 +199,30 @@ export default function MinerPage() {
     return () => clearInterval(checkInterval);
   }, [isMining, miningStartTime, realShares, difficulty]);
 
+  // Periodic stats update to backend (every 5 seconds while mining)
+  useEffect(() => {
+    if (!isMining || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const statsInterval = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN && totalHashes > 0) {
+        try {
+          const statsMsg = {
+            type: 'stats',
+            totalHashes: totalHashes,
+            hashesPerSecond: hashesPerSecond,
+          };
+          wsRef.current.send(JSON.stringify(statsMsg));
+        } catch (error) {
+          console.error('Error sending stats update:', error);
+        }
+      }
+    }, 5000); // Update every 5 seconds
+
+    return () => clearInterval(statsInterval);
+  }, [isMining, totalHashes, hashesPerSecond]);
+
   const connectWebSocket = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       addLog('info', 'Already connected');
