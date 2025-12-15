@@ -455,6 +455,19 @@ function generateLauncherHTML(config: {
         if (platform === 'mac') {
           addLog('info', 'Creating Mac launcher...');
           
+          // Get the current HTML file's directory (where scripts will be downloaded)
+          // If opened as file://, we can get the path; otherwise use Downloads as fallback
+          let scriptDir = '';
+          if (window.location.protocol === 'file:') {
+            const htmlPath = window.location.pathname;
+            scriptDir = htmlPath.substring(0, htmlPath.lastIndexOf('/')) || '/';
+            addLog('info', \`Detected HTML location: \${scriptDir}\`);
+          } else {
+            // Web-based: scripts will download to Downloads
+            scriptDir = '~/Downloads';
+            addLog('info', 'Web-based download - using Downloads folder');
+          }
+          
           // Download the install script first
           const scriptUrl_local = URL.createObjectURL(scriptBlob);
           const scriptLink = document.createElement('a');
@@ -465,20 +478,25 @@ function generateLauncherHTML(config: {
           document.body.removeChild(scriptLink);
           
           // Create a shell script launcher that opens Terminal
+          // This script finds its own location and runs install-minr-miner.sh from the same directory
           const launcherScript = \`#!/bin/bash
-# Get the directory where this script is located
+# Get the directory where this script is located (works regardless of where it's saved)
 SCRIPT_DIR="\\$(cd "\\$(dirname "\\$0")" && pwd)"
 cd "\\$SCRIPT_DIR"
 
-# Make install script executable
-chmod +x install-minr-miner.sh
-
-# Open Terminal and run the install script using AppleScript
-# Pass the script directory as a variable to AppleScript
-osascript -e "tell application \\"Terminal\\"" \\
-  -e "activate" \\
-  -e "set currentTab to do script \\"cd \\\\\\"\\$SCRIPT_DIR\\\\\\" && ./install-minr-miner.sh\\"" \\
-  -e "end tell"\`;
+# Make install script executable (it should be in the same directory)
+if [ -f "install-minr-miner.sh" ]; then
+    chmod +x install-minr-miner.sh
+    
+    # Open Terminal and run the install script using AppleScript
+    osascript -e "tell application \\"Terminal\\"" \\
+      -e "activate" \\
+      -e "set currentTab to do script \\"cd \\\\\\"\\$SCRIPT_DIR\\\\\\" && ./install-minr-miner.sh\\"" \\
+      -e "end tell"
+else
+    echo "Error: install-minr-miner.sh not found in \\$SCRIPT_DIR"
+    osascript -e "display dialog \\"Error: install-minr-miner.sh not found in the same folder as launch-install.sh\\" buttons {\\"OK\\"} default button \\"OK\\""
+fi\`;
           
           const launcherBlob = new Blob([launcherScript], { type: 'application/x-sh' });
           const launcherUrl = URL.createObjectURL(launcherBlob);
@@ -490,19 +508,24 @@ osascript -e "tell application \\"Terminal\\"" \\
           document.body.removeChild(launcherLink);
           
           addLog('success', 'Scripts downloaded!');
-          addLog('info', 'Opening Terminal automatically...');
+          addLog('info', 'Creating auto-launcher...');
           
-          // Try to auto-execute the launcher (works if file is opened locally)
+          // Create an AppleScript that finds launch-install.sh in the same directory as the AppleScript file
           setTimeout(() => {
-            // Create an AppleScript file that can be double-clicked
-            // Use AppleScript's native path handling for Downloads folder
-            const appleScriptContent = \`tell application "Terminal"
+            const appleScriptContent = \`-- Auto-launcher for Minr.online CPU Miner
+-- This script finds launch-install.sh in the same directory and runs it
+tell application "Finder"
+    set scriptPath to path to me
+    set scriptDir to container of scriptPath
+    set launcherPath to (scriptDir as string) & "launch-install.sh"
+    set launcherPosixPath to POSIX path of launcherPath
+end tell
+
+tell application "Terminal"
     activate
-    set downloadsFolder to path to downloads folder as string
-    set downloadsPath to POSIX path of downloadsFolder
-    set scriptPath to downloadsPath & "launch-install.sh"
-    do shell script "chmod +x " & quoted form of scriptPath
-    set currentTab to do script "cd " & quoted form of downloadsPath & " && " & quoted form of scriptPath
+    set scriptDirPosix to POSIX path of (scriptDir as alias)
+    do shell script "chmod +x " & quoted form of launcherPosixPath
+    set currentTab to do script "cd " & quoted form of scriptDirPosix & " && " & quoted form of launcherPosixPath
 end tell\`;
             
             const appleScriptBlob = new Blob([appleScriptContent], { type: 'text/plain' });
@@ -514,7 +537,8 @@ end tell\`;
             appleScriptLink.click();
             document.body.removeChild(appleScriptLink);
             
-            addLog('info', 'Double-click "open-terminal.applescript" to automatically open Terminal and start installation!');
+            addLog('info', 'All files downloaded! Double-click "open-terminal.applescript" to start!');
+            addLog('info', 'Make sure all files (HTML, .sh, .applescript) are in the same folder!');
             updateStatus('Double-click open-terminal.applescript to start!', 'success');
           }, 1000);
           
