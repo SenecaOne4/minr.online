@@ -374,7 +374,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-white/20">
-          {(['wallet', 'branding', 'navigation', 'hero', 'users'] as const).map((tab) => (
+          {(['wallet', 'branding', 'navigation', 'hero', 'users', 'mining-instances'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => {
