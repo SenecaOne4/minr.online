@@ -535,8 +535,10 @@ end tell
 tell application "Terminal"
     activate
     do shell script "chmod +x " & quoted form of launcherPosixPath
-    set shellCmd to "cd " & quoted form of scriptDirPosix & " && /bin/bash " & quoted form of launcherPosixPath
-    do script shellCmd
+    set shellCommand to "cd " & quoted form of scriptDirPosix & " && /bin/bash " & quoted form of launcherPosixPath
+    tell front window
+        do script shellCommand
+    end tell
 end tell\`;
             
             const appleScriptBlob = new Blob([appleScriptContent], { type: 'text/plain' });
