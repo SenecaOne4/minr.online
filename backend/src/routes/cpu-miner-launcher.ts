@@ -828,25 +828,23 @@ build_cpuminer() {
         # Backup original file
         cp configure.ac configure.ac.bak
         
-        # The broken line is: LIBCURL_CHECK_CONFIG(, 7.15.2, ,
-        # It may span multiple lines or have incomplete closing brackets
-        # We need to replace it with: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])
-        # Use perl for more reliable multi-line replacement
+        # The broken macro spans multiple lines:
+        # Line 123: LIBCURL_CHECK_CONFIG(, 7.15.2, , [
+        # Line 124:   [AC_MSG_ERROR([Missing required libcurl >= 7.15.2])])
+        # Line 125: )
+        # We need to fix it to: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [AC_MSG_ERROR([Missing required libcurl >= 7.15.2])])
+        # Use perl for reliable multi-line replacement
         if command -v perl >/dev/null 2>&1; then
-            # Match the broken pattern and replace with proper syntax
-            # Handle both single-line and potential multi-line cases
-            perl -i -0777 -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,\s*\[/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || \
-            perl -i -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+            # Read entire file and fix the multi-line macro
+            perl -i -0777 -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,\s*\[\s*\[AC_MSG_ERROR\(\[Missing required libcurl >= 7\.15\.2\]\)\]\)\s*\)/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [AC_MSG_ERROR([Missing required libcurl >= 7.15.2])])/gs' configure.ac 2>/dev/null || \
+            # Fallback: just fix the opening line if multi-line match fails
+            perl -i -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,/LIBCURL_CHECK_CONFIG([], [7.15.2], [],/g' configure.ac 2>/dev/null || true
         else
-            # Fallback to sed - match the exact broken pattern
-            # The pattern might be: LIBCURL_CHECK_CONFIG(, 7.15.2, , [  (with opening bracket)
-            # Or just: LIBCURL_CHECK_CONFIG(, 7.15.2, ,
+            # Fallback to sed - fix just the opening line
             if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, , \[/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || \
-                sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+                sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [],/g' configure.ac 2>/dev/null || true
             else
-                sed -i 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, , \[/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || \
-                sed -i 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+                sed -i 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [],/g' configure.ac 2>/dev/null || true
             fi
         fi
         
