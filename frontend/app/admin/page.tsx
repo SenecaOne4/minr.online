@@ -8,14 +8,14 @@ import ImageLibrary from '@/components/ImageLibrary';
 
 interface SiteSettings {
   id: string;
-  admin_btc_wallet?: string;
-  favicon_url?: string;
-  logo_url?: string;
-  og_image_url?: string;
-  hero_title?: string;
-  hero_subtitle?: string;
-  hero_image_url?: string;
-  navigation_items?: any[];
+  admin_btc_wallet?: string | null;
+  favicon_url?: string | null;
+  logo_url?: string | null;
+  og_image_url?: string | null;
+  hero_title?: string | null;
+  hero_subtitle?: string | null;
+  hero_image_url?: string | null;
+  navigation_items?: any[] | null;
 }
 
 export default function AdminPage() {
