@@ -828,22 +828,28 @@ build_cpuminer() {
         # Backup original file
         cp configure.ac configure.ac.bak
         
-        # Fix the broken LIBCURL_CHECK_CONFIG macro call - need to match the exact pattern
-        # The issue is line 123 has: LIBCURL_CHECK_CONFIG(, 7.15.2, ,
-        # We need to replace it with proper m4 syntax: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])
-        # Use perl for more reliable multi-line replacement, or sed with proper escaping
+        # The broken line is: LIBCURL_CHECK_CONFIG(, 7.15.2, ,
+        # We need to replace it with: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])
+        # Use perl for more reliable replacement
         if command -v perl >/dev/null 2>&1; then
-            perl -i -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+            perl -i -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null
         else
-            # Fallback to sed - be more careful with the pattern
-            sed -i.bak 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || \
-            sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+            # Fallback to sed - match the exact broken pattern and replace completely
+            # Match: LIBCURL_CHECK_CONFIG(, 7.15.2, ,  (note the trailing space/comma)
+            # Replace with: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+            else
+                sed -i 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+            fi
         fi
         
-        # Verify the patch didn't break the file (check for balanced quotes/parentheses)
+        # Verify the patch worked - check if the file still has the macro and is valid
         if ! grep -q "LIBCURL_CHECK_CONFIG" configure.ac 2>/dev/null; then
-            log "Warning: configure.ac patch may have failed, restoring backup..."
+            log "Warning: configure.ac patch removed macro, restoring backup..."
             mv configure.ac.bak configure.ac 2>/dev/null || true
+        elif grep -q "LIBCURL_CHECK_CONFIG(, 7" configure.ac 2>/dev/null; then
+            log "Warning: configure.ac patch may not have worked, but continuing..."
         fi
     fi
     
