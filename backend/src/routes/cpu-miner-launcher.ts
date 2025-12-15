@@ -51,8 +51,11 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     });
 
     // Send as downloadable HTML file
-    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="minr-cpu-miner-launcher-${Date.now()}.html"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.send(html);
   } catch (error: any) {
     console.error('[cpu-miner-launcher] Error generating launcher:', error);

@@ -152,29 +152,33 @@ export default function MinersPage() {
                 <p className="text-sm text-gray-300 mb-3">
                   Download a standalone HTML file that runs in your browser. Perfect for quick testing or low-resource mining.
                 </p>
-                <a
-                  href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/standalone-miner`}
-                  download="minr-desktop-miner.html"
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
+                <button
                   onClick={async (e) => {
-                    if (!user) return;
+                    if (!user) {
+                      alert('Please log in to download the miner');
+                      return;
+                    }
                     const { data: { session } } = await supabase!.auth.getSession();
                     if (!session) {
-                      e.preventDefault();
                       alert('Please log in to download the miner');
                       return;
                     }
                     
-                    e.preventDefault();
                     try {
-                      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-                      const response = await fetch(`${apiBaseUrl}/api/standalone-miner`, {
+                      const response = await fetch('/api/standalone-miner', {
                         headers: { Authorization: `Bearer ${session.access_token}` },
                       });
                       
                       if (!response.ok) {
-                        const error = await response.json();
-                        alert(`Error: ${error.error || 'Failed to download miner'}`);
+                        const errorText = await response.text();
+                        let errorMessage = 'Failed to download miner';
+                        try {
+                          const errorJson = JSON.parse(errorText);
+                          errorMessage = errorJson.error || errorMessage;
+                        } catch {
+                          errorMessage = errorText || errorMessage;
+                        }
+                        alert(`Error: ${errorMessage}`);
                         return;
                       }
                       
@@ -188,15 +192,17 @@ export default function MinersPage() {
                       window.URL.revokeObjectURL(url);
                       document.body.removeChild(a);
                     } catch (error: any) {
-                      alert(`Error downloading miner: ${error.message}`);
+                      console.error('Download error:', error);
+                      alert(`Error downloading miner: ${error.message || 'Unknown error'}`);
                     }
                   }}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   Download HTML Miner
-                </a>
+                </button>
               </div>
 
               {/* CPU Miner Option */}
@@ -212,29 +218,33 @@ export default function MinersPage() {
                   Download an HTML launcher that handles one-click installation of dependencies and cpuminer. 
                   Auto-configures from minr.online - no manual setup needed!
                 </p>
-                <a
-                  href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/cpu-miner-launcher`}
-                  download="minr-cpu-miner-launcher.html"
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
+                <button
                   onClick={async (e) => {
-                    if (!user) return;
+                    if (!user) {
+                      alert('Please log in to download the CPU miner launcher');
+                      return;
+                    }
                     const { data: { session } } = await supabase!.auth.getSession();
                     if (!session) {
-                      e.preventDefault();
                       alert('Please log in to download the CPU miner launcher');
                       return;
                     }
                     
-                    e.preventDefault();
                     try {
-                      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-                      const response = await fetch(`${apiBaseUrl}/api/cpu-miner-launcher`, {
+                      const response = await fetch('/api/cpu-miner-launcher', {
                         headers: { Authorization: `Bearer ${session.access_token}` },
                       });
                       
                       if (!response.ok) {
-                        const error = await response.json();
-                        alert(`Error: ${error.error || 'Failed to download launcher'}`);
+                        const errorText = await response.text();
+                        let errorMessage = 'Failed to download launcher';
+                        try {
+                          const errorJson = JSON.parse(errorText);
+                          errorMessage = errorJson.error || errorMessage;
+                        } catch {
+                          errorMessage = errorText || errorMessage;
+                        }
+                        alert(`Error: ${errorMessage}`);
                         return;
                       }
                       
@@ -248,15 +258,17 @@ export default function MinersPage() {
                       window.URL.revokeObjectURL(url);
                       document.body.removeChild(a);
                     } catch (error: any) {
-                      alert(`Error downloading launcher: ${error.message}`);
+                      console.error('Download error:', error);
+                      alert(`Error downloading launcher: ${error.message || 'Unknown error'}`);
                     }
                   }}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   Download CPU Miner Launcher
-                </a>
+                </button>
               </div>
 
               <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
