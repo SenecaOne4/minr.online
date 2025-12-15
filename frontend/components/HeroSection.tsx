@@ -135,29 +135,78 @@ export default function HeroSection({ settings }: HeroSectionProps) {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
-      {/* Background image with error handling */}
-      {backgroundImage && (
-        <>
-          <img
-            src={backgroundImage}
-            alt=""
-            className="absolute inset-0 w-full h-full object-contain object-center max-h-screen z-0"
-            style={{
-              filter: 'brightness(0.85) contrast(1.15) saturate(0.9)',
-            }}
-            onError={() => setImageError(true)}
-            onLoad={() => setImageError(false)}
-          />
-          {!imageError && (
-            <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-purple-900/40 to-black/80 backdrop-blur-sm z-[1]" />
-          )}
-        </>
-      )}
-      {(!backgroundImage || imageError) && (
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 z-0" />
-      )}
-      <div className="relative z-10 max-w-4xl mx-auto px-4 w-full">
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 z-0" />
+      
+      {/* Christmas Banner */}
+      <div className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-r from-red-600 via-green-600 via-yellow-500 to-red-600 border-b-4 border-yellow-400 shadow-2xl overflow-hidden">
+        <div className="relative py-4 px-4">
+          {/* Animated twinkling lights border */}
+          <div className="absolute top-0 left-0 right-0 h-1 flex gap-1">
+            {[...Array(50)].map((_, i) => (
+              <div
+                key={`top-${i}`}
+                className="flex-1 h-full bg-yellow-300 rounded-full twinkle-light"
+                style={{
+                  animationDelay: `${i * 0.1}s`,
+                }}
+              />
+            ))}
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 flex gap-1">
+            {[...Array(50)].map((_, i) => (
+              <div
+                key={`bottom-${i}`}
+                className="flex-1 h-full bg-yellow-300 rounded-full twinkle-light"
+                style={{
+                  animationDelay: `${(i + 25) * 0.1}s`,
+                }}
+              />
+            ))}
+          </div>
+          
+          {/* Animated floating lights */}
+          <div className="absolute inset-0 flex items-center justify-center gap-3 opacity-40 pointer-events-none">
+            {[...Array(15)].map((_, i) => (
+              <div
+                key={`light-${i}`}
+                className="w-3 h-3 rounded-full bg-yellow-300 twinkle-light"
+                style={{
+                  animationDelay: `${i * 0.3}s`,
+                  left: `${(i * 6.67)}%`,
+                }}
+              />
+            ))}
+          </div>
+          
+          <div className="relative text-center">
+            <h2 className="text-2xl md:text-4xl font-bold text-white drop-shadow-lg christmas-glow">
+              🎄 🎅 NO FEE FREE TO RUN ALL THROUGH CHRISTMAS!!! 🎁 ⭐
+            </h2>
+            <p className="text-sm md:text-lg text-yellow-200 mt-1 font-semibold">
+              Start mining now - completely free until January 1st!
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative z-10 max-w-4xl mx-auto px-4 w-full pt-24">
         <div className="text-center mb-8">
+          {/* Hero image above title */}
+          {backgroundImage && (
+            <div className="mb-6 flex justify-center">
+              <img
+                src={backgroundImage}
+                alt="Minr.online Logo"
+                className="max-w-md max-h-48 w-auto h-auto object-contain mx-auto rounded-lg shadow-2xl"
+                style={{
+                  filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.5))',
+                }}
+                onError={() => setImageError(true)}
+                onLoad={() => setImageError(false)}
+              />
+            </div>
+          )}
           <h1 className="text-5xl md:text-7xl font-bold text-white mb-4 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent drop-shadow-2xl">
             {title}
           </h1>
@@ -165,7 +214,7 @@ export default function HeroSection({ settings }: HeroSectionProps) {
             {subtitle}
           </p>
           <p className="text-sm text-gray-300 mt-4">
-            Join the lottery pool • $1 USD entry fee • Split BTC rewards when blocks are found
+            Join the lottery pool • <span className="line-through text-gray-500">$1 USD entry fee</span> <span className="text-green-400 font-bold">FREE UNTIL JAN 1ST!</span> • Split BTC rewards when blocks are found
           </p>
         </div>
 
