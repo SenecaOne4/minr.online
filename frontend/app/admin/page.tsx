@@ -22,7 +22,9 @@ export default function AdminPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<SiteSettings | null>(null);
-  const [activeTab, setActiveTab] = useState<'wallet' | 'branding' | 'navigation' | 'hero' | 'users'>('wallet');
+  const [activeTab, setActiveTab] = useState<'wallet' | 'branding' | 'navigation' | 'hero' | 'users' | 'mining-instances'>('wallet');
+  const [miningInstances, setMiningInstances] = useState<any>(null);
+  const [loadingInstances, setLoadingInstances] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -106,6 +108,46 @@ export default function AdminPage() {
     } finally {
       setLoadingUsers(false);
     }
+  };
+
+  const loadMiningInstances = async () => {
+    setLoadingInstances(true);
+    try {
+      if (!supabase) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/mining-instances`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMiningInstances(data);
+      }
+    } catch (error) {
+      console.error('[admin] Error loading mining instances:', error);
+    } finally {
+      setLoadingInstances(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'mining-instances') {
+      loadMiningInstances();
+      const interval = setInterval(loadMiningInstances, 5000); // Poll every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [activeTab]);
+
+  const formatHashrate = (h: number): string => {
+    if (h >= 1000000) return `${(h / 1000000).toFixed(2)} MH/s`;
+    if (h >= 1000) return `${(h / 1000).toFixed(2)} kH/s`;
+    return `${h.toFixed(2)} H/s`;
   };
 
   const handleMakeAdmin = async (userId: string) => {
@@ -339,6 +381,8 @@ export default function AdminPage() {
                 setActiveTab(tab);
                 if (tab === 'users') {
                   loadUsers();
+                } else if (tab === 'mining-instances') {
+                  loadMiningInstances();
                 }
               }}
               className={`px-6 py-3 font-semibold transition-all duration-200 border-b-2 ${

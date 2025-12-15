@@ -182,7 +182,19 @@ export default function MinersPage() {
                         return;
                       }
                       
+                      // Verify content type
+                      const contentType = response.headers.get('content-type');
+                      console.log('Download response - Content-Type:', contentType, 'Status:', response.status);
+                      
                       const blob = await response.blob();
+                      console.log('Blob type:', blob.type, 'size:', blob.size);
+                      
+                      // Check if blob is empty
+                      if (blob.size === 0) {
+                        alert('Error: Downloaded file is empty. Please try again.');
+                        return;
+                      }
+                      
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
@@ -191,6 +203,11 @@ export default function MinersPage() {
                       a.click();
                       window.URL.revokeObjectURL(url);
                       document.body.removeChild(a);
+                      
+                      // Show success message
+                      setTimeout(() => {
+                        alert('Download complete! Open the HTML file in your browser to start mining.');
+                      }, 100);
                     } catch (error: any) {
                       console.error('Download error:', error);
                       alert(`Error downloading miner: ${error.message || 'Unknown error'}`);
@@ -248,7 +265,24 @@ export default function MinersPage() {
                         return;
                       }
                       
+                      // Verify content type
+                      const contentType = response.headers.get('content-type');
+                      console.log('Download response - Content-Type:', contentType, 'Status:', response.status);
+                      
                       const blob = await response.blob();
+                      console.log('Blob type:', blob.type, 'size:', blob.size);
+                      
+                      // Check if blob is empty
+                      if (blob.size === 0) {
+                        alert('Error: Downloaded file is empty. Please try again.');
+                        return;
+                      }
+                      
+                      // Verify it's HTML
+                      if (!blob.type.includes('html') && !contentType?.includes('html')) {
+                        console.warn('Warning: Content-Type is not HTML:', contentType);
+                      }
+                      
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
@@ -257,6 +291,11 @@ export default function MinersPage() {
                       a.click();
                       window.URL.revokeObjectURL(url);
                       document.body.removeChild(a);
+                      
+                      // Show success message
+                      setTimeout(() => {
+                        alert('Download complete! Open the HTML file in your browser to start mining.');
+                      }, 100);
                     } catch (error: any) {
                       console.error('Download error:', error);
                       alert(`Error downloading launcher: ${error.message || 'Unknown error'}`);

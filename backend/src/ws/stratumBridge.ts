@@ -99,7 +99,7 @@ export function handleStratumConnection(ws: WebSocket): void {
               // Update share status to accepted
               if (meta.userId && supabase) {
                 try {
-                  await supabase
+                  const { error: updateError } = await supabase
                     .from('share_submissions')
                     .update({ status: 'accepted' })
                     .eq('user_id', meta.userId)
@@ -107,19 +107,34 @@ export function handleStratumConnection(ws: WebSocket): void {
                     .order('submitted_at', { ascending: false })
                     .limit(1);
                   
-                  meta.acceptedShares++;
+                  if (updateError) {
+                    console.error('[bridge] Error updating share to accepted:', updateError);
+                  } else {
+                    meta.acceptedShares++;
+                    console.log('[bridge] ✅ Share accepted, total:', meta.acceptedShares);
+                  }
                   
                   // Update session stats
                   if (meta.miningSessionId) {
-                    await supabase
+                    const duration = meta.startTime ? (Date.now() - meta.startTime) / 1000 : 0;
+                    const avgHashrate = duration > 0 ? meta.totalHashes / duration : 0;
+                    
+                    const { error: sessionError } = await supabase
                       .from('mining_sessions')
                       .update({
                         accepted_shares: meta.acceptedShares,
+                        rejected_shares: meta.rejectedShares,
+                        total_hashes: meta.totalHashes,
+                        avg_hashrate: avgHashrate,
                       })
                       .eq('id', meta.miningSessionId);
+                    
+                    if (sessionError) {
+                      console.error('[bridge] Error updating session stats:', sessionError);
+                    }
                   }
                 } catch (error: any) {
-                  console.error('[bridge] Error updating share status:', error.message);
+                  console.error('[bridge] Exception updating share status:', error.message);
                 }
               }
             } else {
@@ -128,7 +143,7 @@ export function handleStratumConnection(ws: WebSocket): void {
               // Update share status to rejected
               if (meta.userId && supabase) {
                 try {
-                  await supabase
+                  const { error: updateError } = await supabase
                     .from('share_submissions')
                     .update({ status: 'rejected' })
                     .eq('user_id', meta.userId)
@@ -136,19 +151,34 @@ export function handleStratumConnection(ws: WebSocket): void {
                     .order('submitted_at', { ascending: false })
                     .limit(1);
                   
-                  meta.rejectedShares++;
+                  if (updateError) {
+                    console.error('[bridge] Error updating share to rejected:', updateError);
+                  } else {
+                    meta.rejectedShares++;
+                    console.log('[bridge] ❌ Share rejected, total:', meta.rejectedShares);
+                  }
                   
                   // Update session stats
                   if (meta.miningSessionId) {
-                    await supabase
+                    const duration = meta.startTime ? (Date.now() - meta.startTime) / 1000 : 0;
+                    const avgHashrate = duration > 0 ? meta.totalHashes / duration : 0;
+                    
+                    const { error: sessionError } = await supabase
                       .from('mining_sessions')
                       .update({
+                        accepted_shares: meta.acceptedShares,
                         rejected_shares: meta.rejectedShares,
+                        total_hashes: meta.totalHashes,
+                        avg_hashrate: avgHashrate,
                       })
                       .eq('id', meta.miningSessionId);
+                    
+                    if (sessionError) {
+                      console.error('[bridge] Error updating session stats:', sessionError);
+                    }
                   }
                 } catch (error: any) {
-                  console.error('[bridge] Error updating share status:', error.message);
+                  console.error('[bridge] Exception updating share status:', error.message);
                 }
               }
             }
@@ -262,10 +292,14 @@ export function handleStratumConnection(ws: WebSocket): void {
                 .select()
                 .single();
               
-              if (!sessionError && session) {
+              if (sessionError) {
+                console.error('[bridge] Error creating mining session:', sessionError);
+              } else if (session) {
                 meta.miningSessionId = session.id;
                 meta.startTime = Date.now();
-                console.log('[bridge] Mining session created:', session.id);
+                console.log('[bridge] ✅ Mining session created:', session.id, 'for user:', meta.userId);
+              } else {
+                console.error('[bridge] Failed to create mining session: no data returned');
               }
             } catch (error: any) {
               console.error('[bridge] Error checking payment:', error.message);
@@ -319,7 +353,14 @@ export function handleStratumConnection(ws: WebSocket): void {
         if (meta.userId && meta.miningSessionId && supabase) {
           (async () => {
             try {
-              await supabase
+              console.log('[bridge] Inserting share:', { 
+                userId: meta.userId, 
+                sessionId: meta.miningSessionId, 
+                jobId, 
+                nonce 
+              });
+              
+              const { data, error } = await supabase
                 .from('share_submissions')
                 .insert({
                   user_id: meta.userId,
@@ -328,13 +369,25 @@ export function handleStratumConnection(ws: WebSocket): void {
                   nonce: nonce,
                   status: 'pending',
                   difficulty: meta.currentJob?.difficulty || 1,
-                });
+                })
+                .select()
+                .single();
               
-              meta.shareCount++;
+              if (error) {
+                console.error('[bridge] Error inserting share:', error);
+              } else {
+                console.log('[bridge] ✅ Share inserted successfully:', data?.id);
+                meta.shareCount++;
+              }
             } catch (error: any) {
-              console.error('[bridge] Error recording share:', error.message);
+              console.error('[bridge] Exception recording share:', error.message, error.stack);
             }
           })();
+        } else {
+          console.warn('[bridge] Cannot record share - missing userId or sessionId:', {
+            userId: meta.userId,
+            sessionId: meta.miningSessionId
+          });
         }
         
         // Forward to TCP upstream (add newline for Stratum protocol)

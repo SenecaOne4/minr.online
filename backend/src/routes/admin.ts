@@ -398,5 +398,101 @@ router.post('/users/:id/exempt-fee', async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+// GET /api/admin/mining-instances - Get all active mining instances across all users
+router.get('/mining-instances', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
+    // Get all active mining sessions with user info
+    const { data: sessions, error } = await supabase!
+      .from('mining_sessions')
+      .select(`
+        id,
+        user_id,
+        worker_name,
+        started_at,
+        total_hashes,
+        accepted_shares,
+        rejected_shares,
+        avg_hashrate,
+        profiles:user_id (
+          id,
+          username,
+          email:auth.users!inner(email)
+        )
+      `)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false });
+
+    if (error) {
+      console.error('[admin] Error fetching mining instances:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    // Group by user_id
+    const userGroups: Record<string, any> = {};
+    
+    for (const session of sessions || []) {
+      const userId = session.user_id;
+      if (!userGroups[userId]) {
+        // Get user email from auth.users
+        let userEmail = 'Unknown';
+        try {
+          const { data: authUser } = await supabase!.auth.admin.getUserById(userId);
+          userEmail = authUser?.user?.email || 'Unknown';
+        } catch (e) {
+          console.error('[admin] Error fetching user email:', e);
+        }
+
+        userGroups[userId] = {
+          user_id: userId,
+          user_email: userEmail,
+          username: session.profiles?.username || null,
+          instances: [],
+          total_hashrate: 0,
+        };
+      }
+
+      const startTime = new Date(session.started_at).getTime();
+      const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
+      const hours = Math.floor(uptimeSeconds / 3600);
+      const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+      const uptime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+      const instance = {
+        id: session.id,
+        worker_name: session.worker_name,
+        started_at: session.started_at,
+        uptime,
+        uptime_seconds: uptimeSeconds,
+        total_hashes: session.total_hashes || 0,
+        accepted_shares: session.accepted_shares || 0,
+        rejected_shares: session.rejected_shares || 0,
+        avg_hashrate: parseFloat(session.avg_hashrate?.toString() || '0'),
+      };
+
+      userGroups[userId].instances.push(instance);
+      userGroups[userId].total_hashrate += instance.avg_hashrate;
+    }
+
+    // Convert to array and sort by total hashrate (descending)
+    const result = Object.values(userGroups).map((group: any) => ({
+      ...group,
+      instance_count: group.instances.length,
+    })).sort((a: any, b: any) => b.total_hashrate - a.total_hashrate);
+
+    res.json({
+      users: result,
+      total_users: result.length,
+      total_instances: (sessions || []).length,
+    });
+  } catch (error: any) {
+    console.error('[admin] Error fetching mining instances:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
 

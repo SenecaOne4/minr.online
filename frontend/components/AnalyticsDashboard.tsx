@@ -178,6 +178,9 @@ export default function AnalyticsDashboard() {
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-xl p-4 shadow-xl">
           <div className="text-sm text-gray-400 mb-1">Active Sessions</div>
           <div className="text-2xl font-bold text-white">{stats.active_sessions}</div>
+          {stats.active_sessions > 0 && (
+            <div className="text-xs text-green-400 mt-1">Mining in progress</div>
+          )}
         </div>
       </div>
 

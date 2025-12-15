@@ -59,20 +59,30 @@ export default function SiteMeta({ settings }: SiteMetaProps) {
     }
 
     // Update OG tags for social sharing (iOS iMessages, etc.)
+    // iOS requires og:image:width and og:image:height for proper display
     if (settings?.og_image_url) {
       updateMetaTag('og:image', settings.og_image_url);
       updateMetaTag('og:image:url', settings.og_image_url);
       updateMetaTag('og:image:secure_url', settings.og_image_url);
       updateMetaTag('og:image:type', 'image/png');
+      updateMetaTag('og:image:width', '1200');
+      updateMetaTag('og:image:height', '630');
+      updateMetaTag('og:image:alt', 'Minr.online - Bitcoin Lottery Pool Mining Platform');
       updateMetaTag('twitter:image', settings.og_image_url);
       updateMetaTag('twitter:image:src', settings.og_image_url);
     } else if (settings?.logo_url) {
       // Fallback to logo if no OG image
       updateMetaTag('og:image', settings.logo_url);
+      updateMetaTag('og:image:width', '1200');
+      updateMetaTag('og:image:height', '630');
+      updateMetaTag('og:image:alt', 'Minr.online Logo');
       updateMetaTag('twitter:image', settings.logo_url);
     } else if (settings?.favicon_url) {
       // Fallback to favicon if no logo or OG image
       updateMetaTag('og:image', settings.favicon_url);
+      updateMetaTag('og:image:width', '512');
+      updateMetaTag('og:image:height', '512');
+      updateMetaTag('og:image:alt', 'Minr.online Favicon');
       updateMetaTag('twitter:image', settings.favicon_url);
     }
     

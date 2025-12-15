@@ -13,7 +13,7 @@ router.get('/', async (req, res: Response) => {
 
     const { data, error } = await supabase
       .from('site_settings')
-      .select('hero_title, hero_subtitle, hero_image_url, navigation_items, admin_btc_wallet')
+      .select('hero_title, hero_subtitle, hero_image_url, navigation_items, admin_btc_wallet, og_image_url, favicon_url, logo_url')
       .eq('id', SETTINGS_ID)
       .single();
 
@@ -28,6 +28,9 @@ router.get('/', async (req, res: Response) => {
       hero_image_url: null,
       navigation_items: null,
       admin_btc_wallet: null,
+      og_image_url: null,
+      favicon_url: null,
+      logo_url: null,
     });
   } catch (error: any) {
     console.error('[publicSettings] Internal server error:', error);

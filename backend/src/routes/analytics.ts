@@ -349,5 +349,59 @@ router.get('/export', authMiddleware, async (req: AuthenticatedRequest, res: Res
   }
 });
 
+// GET /api/analytics/my-instances - Get current user's active mining instances
+router.get('/my-instances', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
+    const userId = req.user!.id;
+
+    // Get all active mining sessions for this user
+    const { data: sessions, error } = await supabase!
+      .from('mining_sessions')
+      .select('id, worker_name, started_at, total_hashes, accepted_shares, rejected_shares, avg_hashrate')
+      .eq('user_id', userId)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false });
+
+    if (error) {
+      console.error('[analytics] Error fetching user instances:', error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    // Calculate uptime and format data
+    const instances = (sessions || []).map(session => {
+      const startTime = new Date(session.started_at).getTime();
+      const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
+      const hours = Math.floor(uptimeSeconds / 3600);
+      const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+      const uptime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+      return {
+        id: session.id,
+        worker_name: session.worker_name,
+        started_at: session.started_at,
+        uptime,
+        uptime_seconds: uptimeSeconds,
+        total_hashes: session.total_hashes || 0,
+        accepted_shares: session.accepted_shares || 0,
+        rejected_shares: session.rejected_shares || 0,
+        avg_hashrate: parseFloat(session.avg_hashrate?.toString() || '0'),
+      };
+    });
+
+    res.json({
+      instances,
+      count: instances.length,
+      total_hashrate: instances.reduce((sum, i) => sum + i.avg_hashrate, 0),
+    });
+  } catch (error: any) {
+    console.error('[analytics] Error fetching user instances:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
 

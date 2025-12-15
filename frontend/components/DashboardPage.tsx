@@ -32,6 +32,7 @@ export default function DashboardPage({ user }: { user: any }) {
   const [btcAddress, setBtcAddress] = useState('');
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [hasPaidEntryFee, setHasPaidEntryFee] = useState(false);
+  const [miningInstances, setMiningInstances] = useState<any>(null);
   
   // Check if user is admin (compare email to admin email)
   const isAdmin = user?.email === 'senecaone4@gmail.com' || profile?.is_admin === true;
@@ -39,6 +40,15 @@ export default function DashboardPage({ user }: { user: any }) {
   useEffect(() => {
     loadData();
   }, [user]);
+
+  useEffect(() => {
+    // Load mining instances and set up polling
+    if (hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) {
+      loadMiningInstances();
+      const interval = setInterval(loadMiningInstances, 5000); // Poll every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [hasPaidEntryFee, profile, isAdmin]);
 
   const loadData = async () => {
     try {
@@ -91,6 +101,34 @@ export default function DashboardPage({ user }: { user: any }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMiningInstances = async () => {
+    try {
+      if (!supabase) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/analytics/my-instances`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMiningInstances(data);
+      }
+    } catch (error) {
+      console.error('Error loading mining instances:', error);
+    }
+  };
+
+  const formatHashrate = (h: number): string => {
+    if (h >= 1000000) return `${(h / 1000000).toFixed(2)} MH/s`;
+    if (h >= 1000) return `${(h / 1000).toFixed(2)} kH/s`;
+    return `${h.toFixed(2)} H/s`;
   };
 
   const handleSaveProfile = async () => {
@@ -261,6 +299,64 @@ export default function DashboardPage({ user }: { user: any }) {
             isAdmin={profile?.is_admin || false}
           />
         </div>
+
+        {/* Active Mining Instances Section */}
+        {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) && (
+          <div className="mb-6">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
+              <h2 className="text-2xl font-bold mb-4 text-white">Active Mining Instances</h2>
+              {miningInstances && miningInstances.count > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-sm text-gray-400">Total Active Miners</p>
+                      <p className="text-3xl font-bold text-white">{miningInstances.count}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-400">Combined Hashrate</p>
+                      <p className="text-2xl font-bold text-green-400">{formatHashrate(miningInstances.total_hashrate)}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {miningInstances.instances.map((instance: any) => (
+                      <div key={instance.id} className="bg-black/30 border border-white/20 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                            <span className="font-semibold text-white">{instance.worker_name}</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-gray-400">Uptime</p>
+                            <p className="text-white">{instance.uptime}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-400">Hashrate</p>
+                            <p className="text-green-400">{formatHashrate(instance.avg_hashrate)}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-400">Accepted</p>
+                            <p className="text-green-400">{instance.accepted_shares}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-400">Rejected</p>
+                            <p className="text-red-400">{instance.rejected_shares}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">No active mining instances</p>
+                  <p className="text-sm text-gray-500 mt-2">Start mining to see your instances here</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Analytics Section */}
         {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) && (

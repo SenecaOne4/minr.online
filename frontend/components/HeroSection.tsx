@@ -141,12 +141,15 @@ export default function HeroSection({ settings }: HeroSectionProps) {
           <img
             src={backgroundImage}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover z-0"
+            className="absolute inset-0 w-full h-full object-contain object-center max-h-screen z-0"
+            style={{
+              filter: 'brightness(0.85) contrast(1.15) saturate(0.9)',
+            }}
             onError={() => setImageError(true)}
             onLoad={() => setImageError(false)}
           />
           {!imageError && (
-            <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-purple-900/30 to-black/70 backdrop-blur-sm z-[1]" />
+            <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-purple-900/40 to-black/80 backdrop-blur-sm z-[1]" />
           )}
         </>
       )}

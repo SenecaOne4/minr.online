@@ -11,6 +11,9 @@ interface SiteSettings {
   hero_title?: string;
   hero_subtitle?: string;
   hero_image_url?: string;
+  og_image_url?: string;
+  favicon_url?: string;
+  logo_url?: string;
 }
 
 export default function Home() {

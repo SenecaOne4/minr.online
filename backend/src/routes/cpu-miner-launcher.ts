@@ -66,12 +66,21 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       apiUrl: process.env.API_URL || 'https://api.minr.online',
     });
 
+    // Verify HTML was generated
+    if (!html || html.length === 0) {
+      console.error('[cpu-miner-launcher] Generated HTML is empty');
+      return res.status(500).json({ error: 'Failed to generate launcher HTML' });
+    }
+
+    console.log('[cpu-miner-launcher] HTML generated successfully, length:', html.length);
+
     // Send as downloadable HTML file
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="minr-cpu-miner-launcher-${Date.now()}.html"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    res.setHeader('Content-Length', Buffer.byteLength(html, 'utf8').toString());
     res.send(html);
   } catch (error: any) {
     console.error('[cpu-miner-launcher] Error generating launcher:', error);
