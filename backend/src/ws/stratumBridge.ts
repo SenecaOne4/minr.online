@@ -241,6 +241,42 @@ export function handleStratumConnection(ws: WebSocket): void {
     try {
       const parsed = JSON.parse(messageStr);
       
+      // Handle stats message (periodic updates from client)
+      if (parsed && typeof parsed === 'object' && parsed.type === 'stats') {
+        if (meta.miningSessionId && supabase) {
+          (async () => {
+            try {
+              const totalHashes = parsed.totalHashes || meta.totalHashes;
+              const hashesPerSecond = parsed.hashesPerSecond || 0;
+              meta.totalHashes = totalHashes;
+              
+              const duration = meta.startTime ? (Date.now() - meta.startTime) / 1000 : 1;
+              const avgHashrate = duration > 0 ? totalHashes / duration : hashesPerSecond;
+              
+              const { error } = await supabase
+                .from('mining_sessions')
+                .update({
+                  total_hashes: totalHashes,
+                  avg_hashrate: avgHashrate,
+                  accepted_shares: meta.acceptedShares,
+                  rejected_shares: meta.rejectedShares,
+                })
+                .eq('id', meta.miningSessionId);
+              
+              if (error) {
+                console.error('[bridge] Error updating session stats:', error);
+              } else {
+                console.log('[bridge] ✅ Stats updated:', { totalHashes, avgHashrate: avgHashrate.toFixed(2) });
+              }
+            } catch (error: any) {
+              console.error('[bridge] Exception updating stats:', error.message);
+            }
+          })();
+        }
+        // Don't forward stats messages to upstream
+        return;
+      }
+      
       // Handle meta message (only if not already received and this looks like meta)
       if (!metaReceived && parsed && typeof parsed === 'object' && parsed.type === 'meta') {
         meta.userId = parsed.userId;

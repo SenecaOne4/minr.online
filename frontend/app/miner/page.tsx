@@ -105,7 +105,23 @@ export default function MinerPage() {
 
         if (type === 'progress') {
           setHashesPerSecond(hashesPerSecond);
-          setTotalHashes((prev) => prev + hashesCompleted);
+          setTotalHashes((prev) => {
+            const newTotal = prev + hashesCompleted;
+            // Send stats update to backend periodically (every ~1000 hashes or every 5 seconds)
+            if (wsRef.current?.readyState === WebSocket.OPEN && (newTotal % 1000 < hashesCompleted || Date.now() % 5000 < 1000)) {
+              try {
+                const statsMsg = {
+                  type: 'stats',
+                  totalHashes: newTotal,
+                  hashesPerSecond: hashesPerSecond,
+                };
+                wsRef.current.send(JSON.stringify(statsMsg));
+              } catch (error) {
+                console.error('Error sending stats update:', error);
+              }
+            }
+            return newTotal;
+          });
         } else if (type === 'shareFound') {
           // Real share found - submit to pool
           addLog('info', `Worker found share: job=${share.jobId}, nonce=${share.nonce}`);
