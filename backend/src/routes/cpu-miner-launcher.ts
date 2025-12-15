@@ -1,31 +1,47 @@
 import { Router, Response } from 'express';
 import { supabase } from '../supabaseClient';
 import { AuthenticatedRequest, authMiddleware } from '../middleware/auth';
-import { readFileSync } from 'fs';
+import { readFileSync, appendFileSync } from 'fs';
 import { join } from 'path';
 
 const router: Router = Router();
 
 // GET /api/cpu-miner-launcher - Generate personalized HTML launcher page
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  // #region agent log
+  try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:10',message:'Route entry',data:{hasUser:!!req.user,userId:req.user?.id,userEmail:req.user?.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:10',message:'Route entry',data:{hasUser:!!req.user,userId:req.user?.id,userEmail:req.user?.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
+  // #endregion
   try {
     if (!supabase) {
+      // #region agent log
+      try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:13',message:'Supabase not configured',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:13',message:'Supabase not configured',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e2){}}
+      // #endregion
       return res.status(503).json({ error: 'Supabase not configured' });
     }
 
     const userId = req.user!.id;
     const userEmail = req.user!.email || '';
+    // #region agent log
+    try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:18',message:'Before profile query',data:{userId,userEmail,userIdLength:userId.length,userIdType:typeof userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:18',message:'Before profile query',data:{userId,userEmail,userIdLength:userId.length,userIdType:typeof userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})+'\n');}catch(e2){}}
+    // #endregion
 
     // Get or create profile (auto-create if doesn't exist)
     let { data: profile, error: profileError } = await supabase!
       .from('profiles')
-      .select('has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
+      .select('id, has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
       .eq('id', userId)
       .single();
+
+    // #region agent log
+    try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:27',message:'After profile query',data:{hasProfile:!!profile,hasError:!!profileError,errorCode:profileError?.code,errorMessage:profileError?.message,errorDetails:profileError?.details,profileId:profile?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:27',message:'After profile query',data:{hasProfile:!!profile,hasError:!!profileError,errorCode:profileError?.code,errorMessage:profileError?.message,errorDetails:profileError?.details,profileId:profile?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
+    // #endregion
 
     // If profile doesn't exist, create it using upsert (safer than insert)
     if (!profile || profileError) {
       console.log('[cpu-miner-launcher] Profile not found, creating with upsert for user:', userId);
+      // #region agent log
+      try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:30',message:'Before upsert',data:{userId,upsertData:{id:userId,username:null,btc_payout_address:null}},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:30',message:'Before upsert',data:{userId,upsertData:{id:userId,username:null,btc_payout_address:null}},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
+      // #endregion
       const { data: newProfile, error: createError } = await supabase!
         .from('profiles')
         .upsert(
@@ -39,8 +55,15 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
         .select('id, has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
         .single();
 
+      // #region agent log
+      try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:42',message:'After upsert',data:{hasNewProfile:!!newProfile,hasError:!!createError,errorCode:createError?.code,errorMessage:createError?.message,errorDetails:createError?.details,errorHint:createError?.hint,newProfileId:newProfile?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:42',message:'After upsert',data:{hasNewProfile:!!newProfile,hasError:!!createError,errorCode:createError?.code,errorMessage:createError?.message,errorDetails:createError?.details,errorHint:createError?.hint,newProfileId:newProfile?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
+      // #endregion
+
       if (createError) {
         console.error('[cpu-miner-launcher] Error creating profile:', createError);
+        // #region agent log
+        try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:45',message:'Upsert error returned',data:{errorCode:createError.code,errorMessage:createError.message,errorDetails:createError.details,errorHint:createError.hint},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:45',message:'Upsert error returned',data:{errorCode:createError.code,errorMessage:createError.message,errorDetails:createError.details,errorHint:createError.hint},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
+        // #endregion
         return res.status(500).json({ 
           error: 'Failed to create profile',
           details: createError.message 
@@ -49,10 +72,16 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
 
       if (!newProfile) {
         console.error('[cpu-miner-launcher] Profile upsert returned no data');
+        // #region agent log
+        try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:52',message:'Upsert returned no data',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:52',message:'Upsert returned no data',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
+        // #endregion
         return res.status(500).json({ error: 'Failed to create profile - no data returned' });
       }
 
       console.log('[cpu-miner-launcher] Profile created successfully:', newProfile.id || userId);
+      // #region agent log
+      try{const logPath='/Users/seneca/Desktop/minr.online/.cursor/debug.log';appendFileSync(logPath,JSON.stringify({location:'cpu-miner-launcher.ts:56',message:'Profile created successfully',data:{newProfileId:newProfile.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e){try{appendFileSync('/var/www/minr-online/.cursor/debug.log',JSON.stringify({location:'cpu-miner-launcher.ts:56',message:'Profile created successfully',data:{newProfileId:newProfile.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e2){}}
+      // #endregion
       profile = newProfile;
     }
 
