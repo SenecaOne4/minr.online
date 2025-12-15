@@ -829,17 +829,23 @@ build_cpuminer() {
         cp configure.ac configure.ac.bak
         
         # The broken line is: LIBCURL_CHECK_CONFIG(, 7.15.2, ,
+        # It may span multiple lines or have incomplete closing brackets
         # We need to replace it with: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])
-        # Use perl for more reliable replacement
+        # Use perl for more reliable multi-line replacement
         if command -v perl >/dev/null 2>&1; then
-            perl -i -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null
+            # Match the broken pattern and replace with proper syntax
+            # Handle both single-line and potential multi-line cases
+            perl -i -0777 -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,\s*\[/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || \
+            perl -i -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
         else
-            # Fallback to sed - match the exact broken pattern and replace completely
-            # Match: LIBCURL_CHECK_CONFIG(, 7.15.2, ,  (note the trailing space/comma)
-            # Replace with: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])
+            # Fallback to sed - match the exact broken pattern
+            # The pattern might be: LIBCURL_CHECK_CONFIG(, 7.15.2, , [  (with opening bracket)
+            # Or just: LIBCURL_CHECK_CONFIG(, 7.15.2, ,
             if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, , \[/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || \
                 sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
             else
+                sed -i 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, , \[/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || \
                 sed -i 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
             fi
         fi
