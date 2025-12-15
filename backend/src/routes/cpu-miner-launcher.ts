@@ -23,23 +23,36 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       .eq('id', userId)
       .single();
 
-    // If profile doesn't exist, create it
+    // If profile doesn't exist, create it using upsert (safer than insert)
     if (!profile || profileError) {
+      console.log('[cpu-miner-launcher] Profile not found, creating with upsert for user:', userId);
       const { data: newProfile, error: createError } = await supabase!
         .from('profiles')
-        .insert({
-          id: userId,
-          username: null,
-          btc_payout_address: null,
-        })
+        .upsert(
+          {
+            id: userId,
+            username: null,
+            btc_payout_address: null,
+          },
+          { onConflict: 'id' }
+        )
         .select('has_paid_entry_fee, exempt_from_entry_fee, is_admin, btc_payout_address, email')
         .single();
 
-      if (createError || !newProfile) {
+      if (createError) {
         console.error('[cpu-miner-launcher] Error creating profile:', createError);
-        return res.status(500).json({ error: 'Failed to create profile' });
+        return res.status(500).json({ 
+          error: 'Failed to create profile',
+          details: createError.message 
+        });
       }
 
+      if (!newProfile) {
+        console.error('[cpu-miner-launcher] Profile upsert returned no data');
+        return res.status(500).json({ error: 'Failed to create profile - no data returned' });
+      }
+
+      console.log('[cpu-miner-launcher] Profile created successfully:', newProfile.id);
       profile = newProfile;
     }
 
