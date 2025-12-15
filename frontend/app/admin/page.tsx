@@ -388,7 +388,7 @@ export default function AdminPage() {
                 <div className="mt-4">
                   <ImageLibrary
                     folder="favicons"
-                    selectedPath={settings?.favicon_url}
+                    selectedPath={settings?.favicon_url || undefined}
                     onSelect={(image) => {
                       setSettings({ ...settings, favicon_url: image.url } as SiteSettings);
                     }}
@@ -449,7 +449,7 @@ export default function AdminPage() {
                 <div className="mt-4">
                   <ImageLibrary
                     folder="logos"
-                    selectedPath={settings?.logo_url}
+                    selectedPath={settings?.logo_url || undefined}
                     onSelect={(image) => {
                       setSettings({ ...settings, logo_url: image.url } as SiteSettings);
                     }}
@@ -509,7 +509,7 @@ export default function AdminPage() {
                 <div className="mt-4">
                   <ImageLibrary
                     folder="og-images"
-                    selectedPath={settings?.og_image_url}
+                    selectedPath={settings?.og_image_url || undefined}
                     onSelect={(image) => {
                       setSettings({ ...settings, og_image_url: image.url } as SiteSettings);
                     }}
@@ -690,7 +690,7 @@ export default function AdminPage() {
                 <div className="mt-4">
                   <ImageLibrary
                     folder="hero-images"
-                    selectedPath={settings?.hero_image_url}
+                    selectedPath={settings?.hero_image_url || undefined}
                     onSelect={(image) => {
                       setSettings({ ...settings, hero_image_url: image.url } as SiteSettings);
                     }}
