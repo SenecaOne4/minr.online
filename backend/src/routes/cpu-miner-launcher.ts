@@ -490,6 +490,7 @@ function generateLauncherHTML(config: {
           // Create a shell script launcher that opens Terminal
           // This script finds its own location and runs install-minr-miner.sh from the same directory
           const launcherScript = \`#!/bin/bash
+# Minr.online CPU Miner Launcher v2.0 (No AppleScript)
 # Get the directory where this script is located (works regardless of where it's saved)
 SCRIPT_DIR="\\$(cd "\\$(dirname "\\$0")" && pwd)"
 cd "\\$SCRIPT_DIR"
