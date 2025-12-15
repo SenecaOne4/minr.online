@@ -239,7 +239,7 @@ export default function MinerPage() {
             }
           } catch (error) {
             console.error('Error getting user session for meta message:', error);
-            addLog('warning', 'Could not send user info - mining session may not be tracked');
+            addLog('info', 'Could not send user info - mining session may not be tracked');
           }
         }
 
