@@ -155,27 +155,55 @@ export default function MinersPage() {
                 </p>
                 <button
                   onClick={async (e) => {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:157',message:'Download button clicked',data:{hasUser:!!user,userEmail:user?.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                    // #endregion
                     if (!user) {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:160',message:'No user found',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
                       alert('Please log in to download the CPU miner launcher');
                       return;
                     }
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:164',message:'Before getSession',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                    // #endregion
                     const { data: { session } } = await supabase!.auth.getSession();
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:167',message:'After getSession',data:{hasSession:!!session,hasAccessToken:!!session?.access_token,tokenLength:session?.access_token?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                    // #endregion
                     if (!session) {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:170',message:'No session found',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
                       alert('Please log in to download the CPU miner launcher');
                       return;
                     }
                     
                     try {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:175',message:'Before fetch request',data:{url:'/api/cpu-miner-launcher',hasToken:!!session.access_token},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
                       const response = await fetch('/api/cpu-miner-launcher', {
                         headers: { Authorization: `Bearer ${session.access_token}` },
                       });
                       
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:180',message:'After fetch request',data:{status:response.status,statusText:response.statusText,ok:response.ok,contentType:response.headers.get('content-type')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
+                      
                       if (!response.ok) {
                         const errorText = await response.text();
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:184',message:'Response not OK',data:{status:response.status,errorText:errorText.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         let errorMessage = 'Failed to download launcher';
                         try {
                           const errorJson = JSON.parse(errorText);
                           errorMessage = errorJson.error || errorMessage;
+                          // #region agent log
+                          fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:189',message:'Parsed error JSON',data:{errorMessage,errorDetails:errorJson.details},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                          // #endregion
                         } catch {
                           errorMessage = errorText || errorMessage;
                         }
@@ -186,12 +214,21 @@ export default function MinersPage() {
                       // Verify content type
                       const contentType = response.headers.get('content-type');
                       console.log('Download response - Content-Type:', contentType, 'Status:', response.status);
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:199',message:'Response OK - before blob',data:{contentType,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
                       
                       const blob = await response.blob();
                       console.log('Blob type:', blob.type, 'size:', blob.size);
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:203',message:'Blob created',data:{blobType:blob.type,blobSize:blob.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
                       
                       // Check if blob is empty
                       if (blob.size === 0) {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:207',message:'Blob is empty',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         alert('Error: Downloaded file is empty. Please try again.');
                         return;
                       }
@@ -201,6 +238,9 @@ export default function MinersPage() {
                         console.warn('Warning: Content-Type is not HTML:', contentType);
                       }
                       
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:214',message:'Before download trigger',data:{blobSize:blob.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
@@ -209,6 +249,9 @@ export default function MinersPage() {
                       a.click();
                       window.URL.revokeObjectURL(url);
                       document.body.removeChild(a);
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:223',message:'Download triggered successfully',data:{filename:a.download},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
                       
                       // Show success message
                       setTimeout(() => {
@@ -216,6 +259,9 @@ export default function MinersPage() {
                       }, 100);
                     } catch (error: any) {
                       console.error('Download error:', error);
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/ab8f8a0e-59c0-4fdb-a2e4-02daf5287ab3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'miners/page.tsx:229',message:'Download exception',data:{errorMessage:error?.message,errorStack:error?.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
                       alert(`Error downloading launcher: ${error.message || 'Unknown error'}`);
                     }
                   }}
