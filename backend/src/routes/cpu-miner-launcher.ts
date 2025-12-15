@@ -529,13 +529,13 @@ tell application "Finder"
     set scriptDir to container of scriptPath
     set launcherPath to (scriptDir as string) & "launch-install.sh"
     set launcherPosixPath to POSIX path of launcherPath
+    set scriptDirPosix to POSIX path of (scriptDir as alias)
 end tell
 
 tell application "Terminal"
     activate
-    set scriptDirPosix to POSIX path of (scriptDir as alias)
     do shell script "chmod +x " & quoted form of launcherPosixPath
-    set currentTab to do script "cd " & quoted form of scriptDirPosix & " && " & quoted form of launcherPosixPath
+    set currentTab to do script "cd " & quoted form of scriptDirPosix & " && bash " & quoted form of launcherPosixPath
 end tell\`;
             
             const appleScriptBlob = new Blob([appleScriptContent], { type: 'text/plain' });
