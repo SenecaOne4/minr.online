@@ -825,9 +825,26 @@ build_cpuminer() {
     # Fix broken configure.ac libcurl check before running autogen/autoreconf
     if [ -f "configure.ac" ]; then
         log "Patching configure.ac to fix libcurl check..."
-        # Fix the broken LIBCURL_CHECK_CONFIG macro call
-        sed -i.bak 's/LIBCURL_CHECK_CONFIG(, 7.15.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [/g' configure.ac 2>/dev/null || \
-        sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7.15.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [/g' configure.ac 2>/dev/null || true
+        # Backup original file
+        cp configure.ac configure.ac.bak
+        
+        # Fix the broken LIBCURL_CHECK_CONFIG macro call - need to match the exact pattern
+        # The issue is line 123 has: LIBCURL_CHECK_CONFIG(, 7.15.2, ,
+        # We need to replace it with proper m4 syntax: LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])
+        # Use perl for more reliable multi-line replacement, or sed with proper escaping
+        if command -v perl >/dev/null 2>&1; then
+            perl -i -pe 's/LIBCURL_CHECK_CONFIG\(\s*,\s*7\.15\.2\s*,\s*,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+        else
+            # Fallback to sed - be more careful with the pattern
+            sed -i.bak 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || \
+            sed -i '' 's/LIBCURL_CHECK_CONFIG(, 7\.15\.2, ,/LIBCURL_CHECK_CONFIG([], [7.15.2], [], [])/g' configure.ac 2>/dev/null || true
+        fi
+        
+        # Verify the patch didn't break the file (check for balanced quotes/parentheses)
+        if ! grep -q "LIBCURL_CHECK_CONFIG" configure.ac 2>/dev/null; then
+            log "Warning: configure.ac patch may have failed, restoring backup..."
+            mv configure.ac.bak configure.ac 2>/dev/null || true
+        fi
     fi
     
     # Try autogen.sh first, fall back to autoreconf if it fails (newer autoconf compatibility)
