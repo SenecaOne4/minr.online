@@ -90,5 +90,40 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
   }
 });
 
+// DELETE /api/miner-stats/cleanup - Clean up old/inactive mining sessions (requires auth)
+router.delete('/cleanup', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase not configured' });
+    }
+
+    const userId = req.user!.id;
+    const { olderThanMinutes = 10 } = req.query; // Default: delete sessions older than 10 minutes
+
+    const cutoffTime = new Date(Date.now() - parseInt(olderThanMinutes as string) * 60 * 1000).toISOString();
+
+    // Delete old sessions for this user that haven't been updated recently
+    const { data, error } = await supabase
+      .from('mining_sessions')
+      .delete()
+      .eq('user_id', userId)
+      .lt('updated_at', cutoffTime);
+
+    if (error) {
+      console.error('[miner-stats] Error cleaning up sessions:', error);
+      return res.status(500).json({ error: 'Failed to clean up sessions' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Cleaned up sessions older than ${olderThanMinutes} minutes`,
+      deletedCount: data?.length || 0
+    });
+  } catch (error: any) {
+    console.error('[miner-stats] Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
 
