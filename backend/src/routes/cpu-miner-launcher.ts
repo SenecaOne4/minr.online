@@ -34,6 +34,11 @@ function getPythonMinerScriptBase64(): string {
 }
 
 const PYTHON_MINER_SCRIPT_B64 = getPythonMinerScriptBase64();
+if (!PYTHON_MINER_SCRIPT_B64) {
+  console.error('[cpu-miner-launcher] WARNING: Python miner script base64 is empty! Installer will fail.');
+} else {
+  console.log(`[cpu-miner-launcher] Python miner script loaded: ${PYTHON_MINER_SCRIPT_B64.length} chars base64`);
+}
 
 // GET /api/cpu-miner-launcher - Generate personalized HTML launcher page
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
