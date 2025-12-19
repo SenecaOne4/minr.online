@@ -459,9 +459,10 @@ class StratumMiner:
         
         # Start mining processes (multiprocessing bypasses GIL for TRUE parallelism)
         # This gives us real CPU parallelism, not just concurrency
+        # Use standalone function (not method) to avoid pickling issues
         for i in range(num_threads):
             process = multiprocessing.Process(
-                target=self.mine_worker_process,
+                target=mine_worker_process,
                 args=(i, self.shared_total_hashes, self.shared_running, self.shared_job, self.share_queue),
                 daemon=True
             )
