@@ -14,15 +14,44 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
 
     const userId = req.user!.id;
 
-    // Fetch user profile
-    const { data: profile } = await supabase!
+    // Fetch user profile (auto-create if doesn't exist, like cpu-miner-launcher does)
+    let { data: profile, error: profileError } = await supabase!
       .from('profiles')
       .select('btc_payout_address, email, has_paid_entry_fee, exempt_from_entry_fee, is_admin')
       .eq('id', userId)
       .single();
 
-    if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
+    // If profile doesn't exist, create it using upsert (safer than insert)
+    if (!profile || profileError) {
+      console.log('[miner-config] Profile not found, creating with upsert for user:', userId);
+      const { data: newProfile, error: createError } = await supabase!
+        .from('profiles')
+        .upsert(
+          {
+            id: userId,
+            username: null,
+            btc_payout_address: null,
+          },
+          { onConflict: 'id' }
+        )
+        .select('btc_payout_address, email, has_paid_entry_fee, exempt_from_entry_fee, is_admin')
+        .single();
+
+      if (createError) {
+        console.error('[miner-config] Error creating profile:', createError);
+        return res.status(500).json({ 
+          error: 'Failed to create profile',
+          details: createError.message 
+        });
+      }
+
+      if (!newProfile) {
+        console.error('[miner-config] Profile upsert returned no data');
+        return res.status(500).json({ error: 'Failed to create profile - no data returned' });
+      }
+
+      console.log('[miner-config] Profile created successfully:', newProfile.id || userId);
+      profile = newProfile;
     }
 
     // Check access
@@ -71,6 +100,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       // Version info
       version: '1.0.0',
       user: profile.email,
+      user_email: profile.email, // Alias for compatibility
     });
   } catch (error: any) {
     console.error('[miner-config] Error fetching config:', error);
