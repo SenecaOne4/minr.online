@@ -905,22 +905,48 @@ WALLET=$(cat "$CONFIG_FILE" | grep -o '"wallet": "[^"]*"' | cut -d'"' -f4)
 WORKER=$(cat "$CONFIG_FILE" | grep -o '"worker": "[^"]*"' | cut -d'"' -f4)
 USER_EMAIL=$(cat "$CONFIG_FILE" | grep -o '"user_email": "[^"]*"' | cut -d'"' -f4 || echo "user")
 
-# Replace placeholders in Python script
+# Replace placeholders in Python script using Python (more reliable than sed)
 log "Configuring miner script..."
-sed -i '' "s|{{USER_EMAIL}}|$USER_EMAIL|g" "$MINER_SCRIPT" 2>/dev/null || \
-sed -i "s|{{USER_EMAIL}}|$USER_EMAIL|g" "$MINER_SCRIPT"
-sed -i '' "s|{{BTC_WALLET}}|$WALLET|g" "$MINER_SCRIPT" 2>/dev/null || \
-sed -i "s|{{BTC_WALLET}}|$WALLET|g" "$MINER_SCRIPT"
-sed -i '' "s|{{STRATUM_HOST}}|$STRATUM_HOST|g" "$MINER_SCRIPT" 2>/dev/null || \
-sed -i "s|{{STRATUM_HOST}}|$STRATUM_HOST|g" "$MINER_SCRIPT"
-sed -i '' "s|{{STRATUM_PORT}}|$STRATUM_PORT|g" "$MINER_SCRIPT" 2>/dev/null || \
-sed -i "s|{{STRATUM_PORT}}|$STRATUM_PORT|g" "$MINER_SCRIPT"
-sed -i '' "s|{{WORKER_NAME}}|$WORKER|g" "$MINER_SCRIPT" 2>/dev/null || \
-sed -i "s|{{WORKER_NAME}}|$WORKER|g" "$MINER_SCRIPT"
-sed -i '' "s|{{API_URL}}|$API_URL|g" "$MINER_SCRIPT" 2>/dev/null || \
-sed -i "s|{{API_URL}}|$API_URL|g" "$MINER_SCRIPT"
-sed -i '' "s|{{AUTH_TOKEN}}|$AUTH_TOKEN|g" "$MINER_SCRIPT" 2>/dev/null || \
-sed -i "s|{{AUTH_TOKEN}}|$AUTH_TOKEN|g" "$MINER_SCRIPT"
+python3 << PYTHON_REPLACE_EOF
+import sys
+import re
+
+# Read miner script
+with open("$MINER_SCRIPT", 'r') as f:
+    content = f.read()
+
+# Escape values for safe replacement
+def escape_for_python(s):
+    return s.replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$')
+
+# Replace placeholders
+replacements = {
+    '{{USER_EMAIL}}': escape_for_python("$USER_EMAIL"),
+    '{{BTC_WALLET}}': escape_for_python("$WALLET"),
+    '{{STRATUM_HOST}}': escape_for_python("$STRATUM_HOST"),
+    '{{STRATUM_PORT}}': "$STRATUM_PORT",
+    '{{WORKER_NAME}}': escape_for_python("$WORKER"),
+    '{{API_URL}}': escape_for_python("$API_URL"),
+    '{{AUTH_TOKEN}}': escape_for_python("$AUTH_TOKEN"),
+}
+
+for placeholder, value in replacements.items():
+    content = content.replace(placeholder, value)
+
+# Write back
+with open("$MINER_SCRIPT", 'w') as f:
+    f.write(content)
+
+print("Placeholders replaced successfully")
+PYTHON_REPLACE_EOF
+
+if [ $? -ne 0 ]; then
+    log "Error: Failed to configure miner script"
+    update_status "error" "Failed to configure miner script" 0
+    exit 1
+fi
+
+log "Miner script configured successfully"
 
 # Create launcher script
 LAUNCHER_SCRIPT="$INSTALL_DIR/start-mining.sh"
