@@ -119,9 +119,10 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     // Send as downloadable HTML file
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="minr-cpu-miner-launcher-${Date.now()}.html"`);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable NGINX buffering
     res.setHeader('Content-Length', Buffer.byteLength(html, 'utf8').toString());
     res.send(html);
   } catch (error: any) {
