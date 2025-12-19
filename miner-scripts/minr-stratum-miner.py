@@ -168,30 +168,33 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 hash1 = sha256(bytes(header_buf)).digest()
                 hash2 = sha256(hash1).digest()
                 # Convert hash to integer for comparison with target
-                # Bitcoin compares hashes as BIG-ENDIAN integers (first byte is most significant)
-                # The target is also a big-endian integer: 0x00000000FFFF0000...
-                # SHA256 output is already in correct byte order for big-endian interpretation
-                hash_int = from_bytes(hash2, byteorder="big")
+                # CRITICAL: Bitcoin compares hashes as LITTLE-ENDIAN integers!
+                # The hash bytes must be reversed before converting to integer
+                # This is why block hashes are displayed in big-endian hex but compared as little-endian ints
+                hash_int = from_bytes(hash2[::-1], byteorder="big")
                 
                 # Debug: log first few hash comparisons to verify target (works in multiprocessing)
                 if debug_mode and loop_count < 10:
+                    import sys
                     hash_hex_full = hex(hash_int)
                     target_hex_full = hex(target)
                     # Also show the raw hash bytes for debugging
                     hash_bytes_repr = hash2.hex()[:32]  # First 16 bytes as hex
-                    print(f"[DEBUG Worker {worker_id}] Hash check #{loop_count}:")
-                    print(f"  Raw hash bytes (hex): {hash2.hex()}")
-                    print(f"  Hash as int (big-endian): {hash_int}")
-                    print(f"  Target as int: {target}")
-                    print(f"  Hash < target: {hash_int < target}")
+                    debug_msg = f"[DEBUG Worker {worker_id}] Hash check #{loop_count}:\n"
+                    debug_msg += f"  Raw hash bytes (hex): {hash2.hex()}\n"
+                    debug_msg += f"  Hash as int (big-endian): {hash_int}\n"
+                    debug_msg += f"  Target as int: {target}\n"
+                    debug_msg += f"  Hash < target: {hash_int < target}\n"
                     # Also check if hash is close to target (within 10% to see if we're in the right ballpark)
                     if target > 0:
                         ratio = hash_int / target
-                        print(f"  Hash/target ratio: {ratio:.2e} (hash is {ratio*100:.1f}% of target)")
+                        debug_msg += f"  Hash/target ratio: {ratio:.2e} (hash is {ratio*100:.1f}% of target)\n"
                         # Check if we're even in the right order of magnitude
                         hash_order = len(str(hash_int))
                         target_order = len(str(target))
-                        print(f"  Hash order of magnitude: 10^{hash_order-1}, Target: 10^{target_order-1}")
+                        debug_msg += f"  Hash order of magnitude: 10^{hash_order-1}, Target: 10^{target_order-1}\n"
+                    sys.stdout.write(debug_msg)
+                    sys.stdout.flush()
                 
                 if hash_int < target:
                     # Found a share! Submit via queue (main process will handle it)
