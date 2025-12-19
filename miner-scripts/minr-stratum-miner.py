@@ -35,9 +35,27 @@ TEST_LOW_DIFF = False
 # Standalone function for multiprocessing (must be outside class to avoid pickling issues)
 def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, shared_job, share_queue, debug_mode=False):
     """Mining worker process (multiprocessing - bypasses GIL for true parallelism)"""
+    # #region agent log
+    import os
+    log_path = "/Users/seneca/Desktop/minr.online/.cursor/debug.log"
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"perf-debug","hypothesisId":"A","location":"mine_worker_process:start","message":"Worker started","data":{"worker_id":worker_id},"timestamp":int(time.time()*1000)}) + "\n")
+    except: pass
+    # #endregion
+    
     # Wait for first job
+    wait_start = time.time()
     while shared_running.value and not shared_job:
         time.sleep(0.1)
+    wait_time = time.time() - wait_start
+    
+    # #region agent log
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"perf-debug","hypothesisId":"B","location":"mine_worker_process:job_wait","message":"Waited for job","data":{"worker_id":worker_id,"wait_seconds":wait_time,"has_job":bool(shared_job)},"timestamp":int(time.time()*1000)}) + "\n")
+    except: pass
+    # #endregion
     
     if not shared_running.value:
         return
@@ -69,10 +87,19 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
     # Local hash counter (64-bit unsigned)
     local_hash_count = 0
     loop_count = 0
+    batch_count = 0
+    last_batch_time = time.time()
+    log_path = "/Users/seneca/Desktop/minr.online/.cursor/debug.log"
             
     while shared_running.value:
         # Get current job from shared memory (may change during mining)
         if not shared_job:
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"perf-debug","hypothesisId":"C","location":"mine_worker_process:no_job","message":"Worker waiting - no job","data":{"worker_id":worker_id},"timestamp":int(time.time()*1000)}) + "\n")
+            except: pass
+            # #endregion
             time.sleep(0.01)  # Brief wait for job
             continue
         
@@ -220,7 +247,9 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                     nonce = nonce_start
             
             # Update shared memory less frequently (every batch) - use 64-bit unsigned
+            lock_start = time.time()
             with shared_total_hashes.get_lock():
+                lock_wait = time.time() - lock_start
                 # Ensure we don't overflow by checking current value
                 current = shared_total_hashes.value
                 if current + batch_size < 2**63:  # Stay within signed 64-bit range for multiprocessing
@@ -228,6 +257,19 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 else:
                     # Wrap around safely (shouldn't happen in practice, but handle it)
                     shared_total_hashes.value = (current + batch_size) % (2**63 - 1)
+            
+            batch_count += 1
+            batch_time = time.time() - last_batch_time
+            last_batch_time = time.time()
+            
+            # #region agent log
+            if batch_count <= 5 or batch_count % 100 == 0:  # Log first 5 batches, then every 100th
+                try:
+                    batch_hps = batch_size / batch_time if batch_time > 0 else 0
+                    with open(log_path, "a") as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"perf-debug","hypothesisId":"D","location":"mine_worker_process:batch_complete","message":"Batch completed","data":{"worker_id":worker_id,"batch_num":batch_count,"batch_size":batch_size,"batch_time_sec":batch_time,"hashes_per_sec":batch_hps,"lock_wait_sec":lock_wait,"local_hash_count":local_hash_count},"timestamp":int(time.time()*1000)}) + "\n")
+                except: pass
+            # #endregion
             
             # Update time occasionally (every 10 batches = ~1M hashes)
             if loop_count % (batch_size * 10) == 0:
@@ -587,6 +629,15 @@ class StratumMiner:
         # Start mining processes (multiprocessing bypasses GIL for TRUE parallelism)
         # This gives us real CPU parallelism, not just concurrency
         # Use standalone function (not method) to avoid pickling issues
+        # #region agent log
+        import os
+        log_path = "/Users/seneca/Desktop/minr.online/.cursor/debug.log"
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"perf-debug","hypothesisId":"E","location":"StratumMiner.start:workers_start","message":"Starting workers","data":{"num_threads":num_threads,"cpu_count":multiprocessing.cpu_count()},"timestamp":int(time.time()*1000)}) + "\n")
+        except: pass
+        # #endregion
+        
         for i in range(num_threads):
             process = multiprocessing.Process(
                 target=mine_worker_process,
@@ -595,6 +646,12 @@ class StratumMiner:
             )
             process.start()
             self.mining_processes.append(process)
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"perf-debug","hypothesisId":"E","location":"StratumMiner.start:worker_started","message":"Worker process started","data":{"worker_id":i,"pid":process.pid,"is_alive":process.is_alive()},"timestamp":int(time.time()*1000)}) + "\n")
+            except: pass
+            # #endregion
         
         # Start share processor thread (processes shares from queue)
         def process_shares():
@@ -616,6 +673,7 @@ class StratumMiner:
             import urllib.error
             
             last_total_hashes = 0  # Track for hashrate calculation (64-bit unsigned)
+            log_path = "/Users/seneca/Desktop/minr.online/.cursor/debug.log"
             
             while self.running:
                 time.sleep(10)
@@ -636,6 +694,14 @@ class StratumMiner:
                     if delta < 0:
                         delta = delta + 2**64  # Handle wrap-around
                     hashrate = delta / 10.0 if duration > 0 else 0  # Delta over last 10 seconds
+                    
+                    # #region agent log
+                    try:
+                        with open(log_path, "a") as f:
+                            f.write(json.dumps({"sessionId":"debug-session","runId":"perf-debug","hypothesisId":"F","location":"print_and_report_stats:hashrate_calc","message":"Hashrate calculated","data":{"total_hashes":total_hashes,"last_total_hashes":last_total_hashes,"delta":delta,"hashrate":hashrate,"duration_sec":duration,"num_workers":len(self.mining_processes),"workers_alive":sum(1 for p in self.mining_processes if p.is_alive())},"timestamp":int(time.time()*1000)}) + "\n")
+                    except: pass
+                    # #endregion
+                    
                     last_total_hashes = total_hashes
                     
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Hashrate: {hashrate:.2f} H/s | "
