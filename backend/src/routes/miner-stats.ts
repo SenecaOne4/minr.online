@@ -119,12 +119,32 @@ router.delete('/cleanup', authMiddleware, async (req: AuthenticatedRequest, res:
     const cutoffTime = new Date(Date.now() - olderThanMinutes * 60 * 1000).toISOString();
 
     // Delete old sessions for this user that haven't been updated recently
-    // Handle both updated_at and created_at (in case updated_at is null)
+    // First, find sessions to delete (handle null updated_at by checking created_at)
+    const { data: sessionsToDelete, error: findError } = await supabase
+      .from('mining_sessions')
+      .select('id')
+      .eq('user_id', userId)
+      .or(`updated_at.lt.${cutoffTime},and(updated_at.is.null,created_at.lt.${cutoffTime})`);
+
+    if (findError) {
+      console.error('[miner-stats] Error finding sessions to delete:', findError);
+      return res.status(500).json({ error: 'Failed to find sessions to delete' });
+    }
+
+    if (!sessionsToDelete || sessionsToDelete.length === 0) {
+      return res.json({ 
+        success: true, 
+        message: `No sessions older than ${olderThanMinutes} minutes found`,
+        deletedCount: 0
+      });
+    }
+
+    // Delete the sessions by ID
+    const sessionIds = sessionsToDelete.map(s => s.id);
     const { data, error } = await supabase
       .from('mining_sessions')
       .delete()
-      .eq('user_id', userId)
-      .or(`updated_at.lt.${cutoffTime},and(updated_at.is.null,created_at.lt.${cutoffTime})`)
+      .in('id', sessionIds)
       .select();
 
     if (error) {
