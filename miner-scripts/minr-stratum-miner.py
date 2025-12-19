@@ -150,12 +150,20 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 hash2 = sha256(hash1).digest()
                 hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse for big-endian comparison
                 
+                # Debug: log first few hash comparisons to verify target
+                if DEBUG_STRATUM and loop_count < 10:
+                    print(f"[DEBUG] Hash check: hash={hex(hash_int)[:20]}..., target={hex(target)[:20]}..., hash < target = {hash_int < target}")
+                
                 if hash_int < target:
                     # Found a share! Submit via queue (main process will handle it)
+                    if DEBUG_STRATUM:
+                        print(f"[DEBUG] ✓ SHARE FOUND! job_id={job_id}, hash={hash2.hex()[:16]}..., target={hex(target)[:20]}...")
                     try:
                         # Convert extranonce2 to hex (must match extranonce2_size)
                         extranonce2_hex = extranonce2_bytes.hex()
                         share_queue.put((job_id, extranonce2_hex, ntime_bytes.hex(), nonce), block=False)
+                        if DEBUG_STRATUM:
+                            print(f"[DEBUG] Share queued: extranonce2={extranonce2_hex}, ntime={ntime_bytes.hex()}, nonce={nonce}")
                     except Exception as e:
                         if DEBUG_STRATUM:
                             print(f"[DEBUG] Failed to queue share: {e}")
