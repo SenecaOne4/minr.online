@@ -50,7 +50,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
         return res.status(500).json({ error: 'Failed to create profile - no data returned' });
       }
 
-      console.log('[miner-config] Profile created successfully:', newProfile.id || userId);
+      console.log('[miner-config] Profile created successfully:', userId);
       profile = newProfile;
     }
 
