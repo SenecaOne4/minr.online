@@ -119,12 +119,12 @@ router.delete('/cleanup', authMiddleware, async (req: AuthenticatedRequest, res:
     const cutoffTime = new Date(Date.now() - olderThanMinutes * 60 * 1000).toISOString();
 
     // Delete old sessions for this user that haven't been updated recently
-    // First, find sessions to delete (handle null updated_at by checking created_at)
+    // Use created_at since updated_at column doesn't exist in the schema
     const { data: sessionsToDelete, error: findError } = await supabase
       .from('mining_sessions')
       .select('id')
       .eq('user_id', userId)
-      .or(`updated_at.lt.${cutoffTime},and(updated_at.is.null,created_at.lt.${cutoffTime})`);
+      .lt('created_at', cutoffTime);
 
     if (findError) {
       console.error('[miner-stats] Error finding sessions to delete:', findError);
