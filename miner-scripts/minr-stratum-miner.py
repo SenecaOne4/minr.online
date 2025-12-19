@@ -125,6 +125,24 @@ class StratumMiner:
         header = version + prevhash + merkle_root + ntime + nbits + struct.pack("<I", nonce)
         return header
     
+    def build_static_header(self, job: Dict[str, Any]) -> bytes:
+        """Build static parts of block header (version + prevhash + merkle_root + nbits)"""
+        # Version comes as hex string from Stratum, convert to int
+        version_str = job.get("version", "20000000")
+        if isinstance(version_str, str):
+            version_int = int(version_str, 16) if version_str.startswith(('0x', '0X')) or all(c in '0123456789abcdefABCDEF' for c in version_str) else int(version_str)
+        else:
+            version_int = version_str
+        version = struct.pack("<I", version_int)
+        
+        prevhash = bytes.fromhex(job["prevhash"])[::-1]  # Reverse for little-endian
+        merkle_root = bytes.fromhex(job["merkle_root"])[::-1]
+        nbits = bytes.fromhex(job["nbits"])[::-1]
+        
+        # Return static parts: version + prevhash + merkle_root + nbits
+        # Dynamic parts (extranonce2, ntime, nonce) will be appended in the loop
+        return version + prevhash + merkle_root + nbits
+    
     def check_share(self, header: bytes, target: int) -> bool:
         """Check if share meets target difficulty"""
         hash_result = self.reverse_bytes(self.double_sha256(header))
@@ -215,31 +233,41 @@ class StratumMiner:
                 max_nonce = (worker_id + 1) * 0x1000000
             
             try:
-                # Build extranonce2 (4 bytes, little-endian)
-                extranonce2 = struct.pack("<I", nonce & 0xFFFFFFFF)
+                # Optimize: Cache time and build header components once per batch
+                # Build ntime once per batch (time doesn't change much in microseconds)
+                current_time = int(time.time())
+                ntime_bytes = struct.pack("<I", current_time)
                 
-                # Build ntime (current time, 4 bytes, little-endian)
-                ntime = struct.pack("<I", int(time.time()))
+                # Pre-build static header parts (version, prevhash, merkle_root, nbits)
+                # These don't change within a job
+                static_header = self.build_static_header(job)
                 
-                # Build block header
-                header = self.build_block_header(job, extranonce2, ntime, nonce)
+                # Process a batch of nonces without sleep (faster)
+                batch_size = 1000
+                for _ in range(batch_size):
+                    # Build extranonce2 (4 bytes, little-endian)
+                    extranonce2 = struct.pack("<I", nonce & 0xFFFFFFFF)
+                    
+                    # Build complete header (static + dynamic parts)
+                    header = static_header + extranonce2 + ntime_bytes + struct.pack("<I", nonce)
+                    
+                    # Check if share meets target
+                    if self.check_share(header, target):
+                        # Found a share!
+                        self.submit_share(job_id, extranonce2, ntime_bytes, nonce)
+                    
+                    self.total_hashes += 1
+                    loop_count += 1
+                    
+                    # Increment nonce
+                    nonce += 1
+                    if nonce >= max_nonce:
+                        nonce = worker_id * 0x1000000  # Wrap around
                 
-                # Check if share meets target
-                if self.check_share(header, target):
-                    # Found a share!
-                    self.submit_share(job_id, extranonce2, ntime, nonce)
-                
-                self.total_hashes += 1
-                loop_count += 1
-                
-                # Increment nonce
-                nonce += 1
-                if nonce >= max_nonce:
-                    nonce = worker_id * 0x1000000  # Wrap around
-                
-                # Small sleep to prevent 100% CPU
-                if self.total_hashes % 10000 == 0:
-                    time.sleep(0.001)
+                # Update time occasionally (every batch)
+                if loop_count % (batch_size * 10) == 0:
+                    current_time = int(time.time())
+                    ntime_bytes = struct.pack("<I", current_time)
                     
                 # #region agent log
                 if loop_count == 1 or loop_count % 100000 == 0:
