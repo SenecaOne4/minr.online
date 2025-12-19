@@ -805,12 +805,30 @@ update_status "installing" "Downloading miner script..." 60
 
 # Download Python miner script from API
 MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
-log "Fetching miner script..."
-curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/cpu-miner-launcher/script" > "$MINER_SCRIPT" || {
-    log "Error downloading miner script"
-    update_status "error" "Failed to download miner script" 0
+log "Fetching miner script from $API_URL/api/cpu-miner-launcher/script..."
+
+# Use curl with timeout (30 seconds) and capture HTTP status code
+HTTP_CODE=$(curl -s -w "%{http_code}" -m 30 -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/cpu-miner-launcher/script" -o "$MINER_SCRIPT" 2>&1)
+CURL_EXIT=$?
+
+if [ $CURL_EXIT -ne 0 ] || [ "$HTTP_CODE" != "200" ]; then
+    log "Error downloading miner script. HTTP code: $HTTP_CODE, Exit code: $CURL_EXIT"
+    if [ -f "$MINER_SCRIPT" ]; then
+        ERROR_MSG=$(head -3 "$MINER_SCRIPT" 2>/dev/null || echo "Unable to read error message")
+        log "Error response: $ERROR_MSG"
+        rm -f "$MINER_SCRIPT"
+    fi
+    update_status "error" "Failed to download miner script (HTTP $HTTP_CODE). Auth token may be expired - please download a fresh HTML file." 0
     exit 1
-}
+fi
+
+if [ ! -s "$MINER_SCRIPT" ]; then
+    log "Error: Downloaded file is empty"
+    update_status "error" "Downloaded miner script is empty" 0
+    exit 1
+fi
+
+log "Miner script downloaded successfully ($(wc -l < "$MINER_SCRIPT" | tr -d ' ') lines)"
 
 chmod +x "$MINER_SCRIPT"
 
@@ -963,12 +981,30 @@ update_status "installing" "Downloading miner script..." 60
 
 # Download Python miner script from API
 MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
-log "Fetching miner script..."
-curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/cpu-miner-launcher/script" > "$MINER_SCRIPT" || {
-    log "Error downloading miner script"
-    update_status "error" "Failed to download miner script" 0
+log "Fetching miner script from $API_URL/api/cpu-miner-launcher/script..."
+
+# Use curl with timeout (30 seconds) and capture HTTP status code
+HTTP_CODE=$(curl -s -w "%{http_code}" -m 30 -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/cpu-miner-launcher/script" -o "$MINER_SCRIPT" 2>&1)
+CURL_EXIT=$?
+
+if [ $CURL_EXIT -ne 0 ] || [ "$HTTP_CODE" != "200" ]; then
+    log "Error downloading miner script. HTTP code: $HTTP_CODE, Exit code: $CURL_EXIT"
+    if [ -f "$MINER_SCRIPT" ]; then
+        ERROR_MSG=$(head -3 "$MINER_SCRIPT" 2>/dev/null || echo "Unable to read error message")
+        log "Error response: $ERROR_MSG"
+        rm -f "$MINER_SCRIPT"
+    fi
+    update_status "error" "Failed to download miner script (HTTP $HTTP_CODE). Auth token may be expired - please download a fresh HTML file." 0
     exit 1
-}
+fi
+
+if [ ! -s "$MINER_SCRIPT" ]; then
+    log "Error: Downloaded file is empty"
+    update_status "error" "Downloaded miner script is empty" 0
+    exit 1
+fi
+
+log "Miner script downloaded successfully ($(wc -l < "$MINER_SCRIPT" | tr -d ' ') lines)"
 
 chmod +x "$MINER_SCRIPT"
 
