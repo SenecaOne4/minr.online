@@ -837,11 +837,21 @@ MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
 log "Writing embedded miner script..."
 
 # Decode base64-encoded Python script
-echo "${pythonScriptB64}" | base64 -d > "$MINER_SCRIPT" || {
-    log "Error: Failed to decode miner script"
-    update_status "error" "Failed to write miner script" 0
+if [ -z "${pythonScriptB64}" ]; then
+    log "Error: Python script base64 data is empty"
+    update_status "error" "Miner script data missing - please download a fresh HTML file" 0
     exit 1
-}
+fi
+
+log "Decoding miner script (base64 length: ${#pythonScriptB64})..."
+echo "${pythonScriptB64}" | base64 -d > "$MINER_SCRIPT" 2>&1
+DECODE_EXIT=$?
+
+if [ $DECODE_EXIT -ne 0 ]; then
+    log "Error: Failed to decode miner script (exit code: $DECODE_EXIT)"
+    update_status "error" "Failed to decode miner script" 0
+    exit 1
+fi
 
 if [ ! -s "$MINER_SCRIPT" ]; then
     log "Error: Miner script file is empty after decoding"
@@ -1006,11 +1016,21 @@ MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
 log "Writing embedded miner script..."
 
 # Decode base64-encoded Python script
-echo "${pythonScriptB64}" | base64 -d > "$MINER_SCRIPT" || {
-    log "Error: Failed to decode miner script"
-    update_status "error" "Failed to write miner script" 0
+if [ -z "${pythonScriptB64}" ]; then
+    log "Error: Python script base64 data is empty"
+    update_status "error" "Miner script data missing - please download a fresh HTML file" 0
     exit 1
-}
+fi
+
+log "Decoding miner script (base64 length: ${#pythonScriptB64})..."
+echo "${pythonScriptB64}" | base64 -d > "$MINER_SCRIPT" 2>&1
+DECODE_EXIT=$?
+
+if [ $DECODE_EXIT -ne 0 ]; then
+    log "Error: Failed to decode miner script (exit code: $DECODE_EXIT)"
+    update_status "error" "Failed to decode miner script" 0
+    exit 1
+fi
 
 if [ ! -s "$MINER_SCRIPT" ]; then
     log "Error: Miner script file is empty after decoding"
