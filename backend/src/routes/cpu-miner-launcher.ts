@@ -872,13 +872,31 @@ chmod +x "$MINER_SCRIPT"
 update_status "installing" "Fetching configuration..." 80
 
 # Fetch configuration from API
-log "Fetching miner configuration..."
+log "Fetching miner configuration from $API_URL/api/miner-config..."
+
 CONFIG_FILE="$INSTALL_DIR/config.json"
-curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/miner-config" > "$CONFIG_FILE" || {
-    log "Error fetching configuration"
-    update_status "error" "Failed to fetch configuration" 0
+# Use curl with timeout (30 seconds) and capture HTTP status code
+HTTP_CODE=$(curl -s -w "%{http_code}" -m 30 -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/miner-config" -o "$CONFIG_FILE" 2>&1)
+CURL_EXIT=$?
+
+if [ $CURL_EXIT -ne 0 ] || [ "$HTTP_CODE" != "200" ]; then
+    log "Error fetching configuration. HTTP code: $HTTP_CODE, Exit code: $CURL_EXIT"
+    if [ -f "$CONFIG_FILE" ]; then
+        ERROR_MSG=$(head -3 "$CONFIG_FILE" 2>/dev/null || echo "Unable to read error message")
+        log "Error response: $ERROR_MSG"
+        rm -f "$CONFIG_FILE"
+    fi
+    update_status "error" "Failed to fetch configuration (HTTP $HTTP_CODE). Auth token may be expired - please download a fresh HTML file." 0
     exit 1
-}
+fi
+
+if [ ! -s "$CONFIG_FILE" ]; then
+    log "Error: Configuration file is empty"
+    update_status "error" "Configuration file is empty" 0
+    exit 1
+fi
+
+log "Configuration fetched successfully"
 
 # Parse config to get values for Python script
 STRATUM_HOST=$(cat "$CONFIG_FILE" | grep -o '"host": "[^"]*"' | cut -d'"' -f4)
@@ -1051,13 +1069,31 @@ chmod +x "$MINER_SCRIPT"
 update_status "installing" "Fetching configuration..." 80
 
 # Fetch configuration from API
-log "Fetching miner configuration..."
+log "Fetching miner configuration from $API_URL/api/miner-config..."
+
 CONFIG_FILE="$INSTALL_DIR/config.json"
-curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/miner-config" > "$CONFIG_FILE" || {
-    log "Error fetching configuration"
-    update_status "error" "Failed to fetch configuration" 0
+# Use curl with timeout (30 seconds) and capture HTTP status code
+HTTP_CODE=$(curl -s -w "%{http_code}" -m 30 -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/miner-config" -o "$CONFIG_FILE" 2>&1)
+CURL_EXIT=$?
+
+if [ $CURL_EXIT -ne 0 ] || [ "$HTTP_CODE" != "200" ]; then
+    log "Error fetching configuration. HTTP code: $HTTP_CODE, Exit code: $CURL_EXIT"
+    if [ -f "$CONFIG_FILE" ]; then
+        ERROR_MSG=$(head -3 "$CONFIG_FILE" 2>/dev/null || echo "Unable to read error message")
+        log "Error response: $ERROR_MSG"
+        rm -f "$CONFIG_FILE"
+    fi
+    update_status "error" "Failed to fetch configuration (HTTP $HTTP_CODE). Auth token may be expired - please download a fresh HTML file." 0
     exit 1
-}
+fi
+
+if [ ! -s "$CONFIG_FILE" ]; then
+    log "Error: Configuration file is empty"
+    update_status "error" "Configuration file is empty" 0
+    exit 1
+fi
+
+log "Configuration fetched successfully"
 
 # Parse config to get values for Python script
 STRATUM_HOST=$(cat "$CONFIG_FILE" | grep -o '"host": "[^"]*"' | cut -d'"' -f4)
