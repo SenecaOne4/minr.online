@@ -54,6 +54,7 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
     
     # Main mining loop - restart when new jobs arrive
     job_id = ""
+    # Default target (max target for difficulty 1.0) - interpreted as big-endian integer
     target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
     coinb1 = ""
     coinb2 = ""
@@ -166,10 +167,11 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 # Double SHA-256
                 hash1 = sha256(bytes(header_buf)).digest()
                 hash2 = sha256(hash1).digest()
-                # Convert hash to integer for comparison
-                # Bitcoin compares hashes as LITTLE-ENDIAN integers (first byte is least significant)
-                # This is the standard way Bitcoin compares block hashes to target
-                hash_int = from_bytes(hash2, byteorder="little")
+                # Convert hash to integer for comparison with target
+                # Bitcoin compares hashes as BIG-ENDIAN integers (first byte is most significant)
+                # The target is also a big-endian integer: 0x00000000FFFF0000...
+                # SHA256 output is already in correct byte order for big-endian interpretation
+                hash_int = from_bytes(hash2, byteorder="big")
                 
                 # Debug: log first few hash comparisons to verify target (works in multiprocessing)
                 if debug_mode and loop_count < 10:
