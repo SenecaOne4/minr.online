@@ -38,8 +38,9 @@ router.post('/', async (req: any, res: Response) => {
       }
     }
     
-    // If no userId from auth, find it from existing sessions with this workerName
+    // If no userId from auth, find it from workerName (email prefix) or existing sessions
     if (!userId) {
+      // First try to find from existing sessions
       const { data: existingSession, error: sessionError } = await supabase
         .from('mining_sessions')
         .select('user_id')
@@ -52,11 +53,48 @@ router.post('/', async (req: any, res: Response) => {
         userId = existingSession.user_id;
         console.log(`[miner-stats] Found userId ${userId} from existing session for worker ${finalWorkerName}`);
       } else {
-        // No existing session - can't create one without userId
-        // Return error asking to start mining from dashboard first
-        return res.status(401).json({ 
-          error: 'No existing session found. Please start mining from the dashboard first to create a session, or provide an authentication token.' 
-        });
+        // No existing session - try to find user by email prefix from workerName
+        // workerName format: minr.emailprefix -> extract emailprefix
+        const emailPrefix = finalWorkerName.replace('minr.', '');
+        
+        // Try to find user by username (which might contain email prefix)
+        const { data: userProfile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('username', `${emailPrefix}%`)
+          .limit(1)
+          .single();
+        
+        if (!profileError && userProfile) {
+          userId = userProfile.id;
+          console.log(`[miner-stats] Found userId ${userId} from profile username match for worker ${finalWorkerName}`);
+        } else {
+          // Last resort: try to find by listing auth users (if we have admin access)
+          try {
+            const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+            if (!authError && authUsers) {
+              const matchingUser = authUsers.users.find(u => u.email?.startsWith(emailPrefix));
+              if (matchingUser) {
+                userId = matchingUser.id;
+                // Create profile if it doesn't exist
+                await supabase.from('profiles').upsert({ 
+                  id: userId, 
+                  username: emailPrefix 
+                }, { onConflict: 'id' });
+                console.log(`[miner-stats] Found userId ${userId} from auth.users and created profile for worker ${finalWorkerName}`);
+              }
+            }
+          } catch (e) {
+            console.error('[miner-stats] Error listing auth users:', e);
+          }
+        }
+        
+        // If still no userId, return 401
+        if (!userId) {
+          return res.status(401).json({ 
+            error: 'No user found for workerName. Please start mining from the dashboard first, or provide an authentication token.' 
+          });
+        }
       }
     }
     
