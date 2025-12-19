@@ -2,7 +2,7 @@
 """
 Minr.online Python Stratum Miner
 A complete Python implementation of a Bitcoin Stratum miner.
-No C dependencies - pure Python with standard library + hashlib.
+Optimized for performance with native SHA256 backends.
 
 This miner connects directly to the Stratum pool and mines Bitcoin blocks.
 """
@@ -16,7 +16,7 @@ import struct
 import threading
 import multiprocessing
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable, Tuple
 
 # Configuration - These are replaced when script is generated
 USER_EMAIL = "{{USER_EMAIL}}"
@@ -30,6 +30,145 @@ AUTH_TOKEN = "{{AUTH_TOKEN}}"
 # Debug mode flag (set via --debug-stratum CLI arg)
 DEBUG_STRATUM = False
 TEST_LOW_DIFF = False
+BENCH_MODE = False
+PROFILE_MODE = False
+
+# SHA256 backend selection (runtime optimization)
+_sha256_backend_name = None
+_sha256_backend = None
+
+def _select_sha256_backend() -> Tuple[str, Callable]:
+    """Select the fastest available SHA256 backend at runtime."""
+    global _sha256_backend_name, _sha256_backend
+    
+    if _sha256_backend is not None:
+        return _sha256_backend_name, _sha256_backend
+    
+    # Try pycryptodome first (fastest, C implementation)
+    try:
+        from Crypto.Hash import SHA256 as Crypto_SHA256
+        def crypto_sha256(data):
+            h = Crypto_SHA256.new()
+            h.update(data)
+            return h.digest()
+        
+        # Test it works
+        test_data = b"test"
+        result = crypto_sha256(crypto_sha256(test_data))
+        if len(result) == 32:
+            _sha256_backend_name = "pycryptodome"
+            _sha256_backend = crypto_sha256
+            return _sha256_backend_name, _sha256_backend
+    except ImportError:
+        pass
+    
+    # Fallback to hashlib (OpenSSL-backed, still fast)
+    def hashlib_sha256(data):
+        return hashlib.sha256(data).digest()
+    
+    _sha256_backend_name = "hashlib (OpenSSL)"
+    _sha256_backend = hashlib_sha256
+    return _sha256_backend_name, _sha256_backend
+
+def sha256d(data: bytes) -> bytes:
+    """Double SHA256: SHA256(SHA256(data))"""
+    backend_name, backend = _select_sha256_backend()
+    return backend(backend(data))
+
+
+def run_benchmark(num_threads: int):
+    """Benchmark mode: test hashing performance without Stratum connection."""
+    print("=" * 60)
+    print("Minr.online Python Stratum Miner - BENCHMARK MODE")
+    print("=" * 60)
+    
+    # Select backend
+    backend_name, sha256_func = _select_sha256_backend()
+    print(f"SHA256 Backend: {backend_name}")
+    print(f"Workers: {num_threads}")
+    print(f"CPU Cores: {multiprocessing.cpu_count()}")
+    print("=" * 60)
+    
+    # Create a fixed 80-byte header for benchmarking
+    # This simulates a real Bitcoin block header
+    test_header = bytearray(80)
+    test_header[0:4] = struct.pack("<I", 0x20000000)  # version
+    test_header[4:36] = b'\x00' * 32  # prevhash (zeros)
+    test_header[36:68] = b'\x00' * 32  # merkle_root (zeros)
+    test_header[68:72] = struct.pack("<I", 0x1d00ffff)  # nbits
+    test_header[72:76] = struct.pack("<I", int(time.time()))  # ntime
+    test_header[76:80] = struct.pack("<I", 0)  # nonce
+    
+    # Shared counter for total hashes
+    shared_total_hashes = multiprocessing.Value('q', 0)
+    shared_running = multiprocessing.Value('b', True)
+    
+    def bench_worker(worker_id: int, shared_total_hashes, shared_running):
+        """Benchmark worker: hash fixed header with varying nonce."""
+        backend_name, sha256_func = _select_sha256_backend()
+        
+        # Create local copy of header
+        header_buf = bytearray(test_header)
+        nonce_start = worker_id * 0x1000000
+        nonce = nonce_start
+        nonce_end = (worker_id + 1) * 0x1000000
+        
+        local_count = 0
+        
+        while shared_running.value:
+            # Mutate only nonce bytes
+            struct.pack_into("<I", header_buf, 76, nonce)
+            
+            # Double SHA256 using backend directly
+            hash1 = sha256_func(bytes(header_buf))
+            hash2 = sha256_func(hash1)
+            
+            local_count += 1
+            nonce += 1
+            
+            if nonce >= nonce_end:
+                nonce = nonce_start
+            
+            # Update shared counter every 100k hashes
+            if local_count % 100000 == 0:
+                with shared_total_hashes.get_lock():
+                    shared_total_hashes.value += 100000
+        
+        # Final update
+        with shared_total_hashes.get_lock():
+            shared_total_hashes.value += local_count % 100000
+    
+    # Start workers
+    processes = []
+    for i in range(num_threads):
+        p = multiprocessing.Process(target=bench_worker, args=(i, shared_total_hashes, shared_running), daemon=True)
+        p.start()
+        processes.append(p)
+    
+    # Run for 5 seconds
+    print("Running benchmark for 5 seconds...")
+    time.sleep(5)
+    
+    # Stop workers
+    shared_running.value = False
+    for p in processes:
+        p.join(timeout=1)
+    
+    # Get final count
+    with shared_total_hashes.get_lock():
+        total_hashes = shared_total_hashes.value
+    
+    total_hps = total_hashes / 5.0
+    per_worker_hps = total_hps / num_threads
+    
+    print("=" * 60)
+    print("BENCHMARK RESULTS")
+    print("=" * 60)
+    print(f"Total hashes: {total_hashes:,}")
+    print(f"Total hashrate: {total_hps:,.0f} H/s")
+    print(f"Per worker: {per_worker_hps:,.0f} H/s")
+    print(f"Backend: {backend_name}")
+    print("=" * 60)
 
 
 # Standalone function for multiprocessing (must be outside class to avoid pickling issues)
@@ -62,8 +201,12 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
     
     # Cache methods locally for speed
     pack_i = struct.pack
-    sha256 = hashlib.sha256
     from_bytes = int.from_bytes
+    
+    # Get SHA256 backend (fastest available)
+    backend_name, sha256_func = _select_sha256_backend()
+    if PROFILE_MODE and worker_id == 0:
+        print(f"[PROFILE Worker {worker_id}] Using SHA256 backend: {backend_name}")
     
     # Pre-compute constants
     nonce_mask = 0xFFFFFFFF
@@ -74,13 +217,15 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
     job_id = ""
     # Default target (max target for difficulty 1.0) - interpreted as big-endian integer
     target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
-    coinb1 = ""
-    coinb2 = ""
-    extranonce1 = ""
-    merkle_branches = []
-    version_str = "20000000"
-    nbits = ""
-    prevhash = ""
+    
+    # Precomputed per-job data (avoids hex decoding in hot loop)
+    coinb1_bytes = b""
+    coinb2_bytes = b""
+    extranonce1_bytes = b""
+    merkle_root_precomputed = b""  # Precomputed merkle root bytes (little-endian, ready for header)
+    version_bytes = b""
+    prevhash_bytes = b""
+    nbits_bytes = b""
     extranonce2_size = 4
     job_ntime = ""  # ntime from job (minimum time)
     
@@ -110,15 +255,40 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
             target = shared_job.get("target", 0x00000000FFFF0000000000000000000000000000000000000000000000000000)
             if isinstance(target, str):
                 target = int(target, 16)
-            coinb1 = shared_job.get("coinb1", "")
-            coinb2 = shared_job.get("coinb2", "")
-            extranonce1 = shared_job.get("extranonce1", "")
+            
+            # Precompute all job data (hex -> bytes conversion done once per job)
+            coinb1_hex = shared_job.get("coinb1", "")
+            coinb2_hex = shared_job.get("coinb2", "")
+            extranonce1_hex = shared_job.get("extranonce1", "")
             merkle_branches = shared_job.get("merkle_branches", [])
             version_str = shared_job.get("version", "20000000")
-            nbits = shared_job.get("nbits", "")
-            prevhash = shared_job.get("prevhash", "")
+            nbits_hex = shared_job.get("nbits", "")
+            prevhash_hex = shared_job.get("prevhash", "")
             extranonce2_size = shared_job.get("extranonce2_size", 4)
             job_ntime = shared_job.get("ntime", "")
+            
+            # Convert hex strings to bytes once per job
+            coinb1_bytes = bytes.fromhex(coinb1_hex)
+            coinb2_bytes = bytes.fromhex(coinb2_hex)
+            extranonce1_bytes = bytes.fromhex(extranonce1_hex)
+            
+            # Precompute merkle root for extranonce2=0 (we'll update it per nonce, but structure is same)
+            # For now, compute with placeholder extranonce2 (will be updated in loop)
+            # Actually, merkle root depends on extranonce2, so we can't fully precompute it
+            # But we can precompute the merkle branches processing
+            
+            # Convert version, prevhash, nbits to bytes (little-endian for header)
+            if isinstance(version_str, str):
+                version_int = int(version_str, 16) if version_str.startswith(('0x', '0X')) or all(c in '0123456789abcdefABCDEF' for c in version_str) else int(version_str)
+            else:
+                version_int = version_str
+            version_bytes = pack_i("<I", version_int)
+            prevhash_bytes = bytes.fromhex(prevhash_hex)[::-1]  # Reverse for little-endian
+            nbits_bytes = bytes.fromhex(nbits_hex)[::-1]
+            
+            # Precompute merkle branches as bytes (avoid hex decode in loop)
+            merkle_branches_bytes = [bytes.fromhex(branch) for branch in merkle_branches]
+            
             # Reset nonce range for new job
             nonce = nonce_start
             
@@ -129,6 +299,14 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 # Also print max_target for comparison
                 max_target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
                 print(f"[DEBUG Worker {worker_id}] Max target: {hex(max_target)}, difficulty should be: {max_target // target if target > 0 else 'N/A'}")
+                # Log first hash check details (will be done once before loop)
+                print(f"[DEBUG Worker {worker_id}] Will log first 10 hash checks for this job")
+            
+            if PROFILE_MODE and worker_id == 0:
+                print(f"[PROFILE Worker {worker_id}] Job update: precomputed coinbase template, merkle branches={len(merkle_branches_bytes)}")
+            
+            # Debug: log first few hash checks ONCE per job (not in hot loop)
+            debug_hash_count = 0
         
         try:
             # Process batches for maximum throughput
@@ -147,80 +325,71 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
             # Pre-allocate bytearray for header (reuse across iterations)
             header_buf = bytearray(80)  # Bitcoin header is 80 bytes
             
-            # Convert version to int
-            if isinstance(version_str, str):
-                version_int = int(version_str, 16) if version_str.startswith(('0x', '0X')) or all(c in '0123456789abcdefABCDEF' for c in version_str) else int(version_str)
-            else:
-                version_int = version_str
-            
-            # Build static header parts (version + prevhash + nbits)
-            version_bytes = pack_i("<I", version_int)
-            prevhash_bytes = bytes.fromhex(prevhash)[::-1]  # Reverse for little-endian
-            nbits_bytes = bytes.fromhex(nbits)[::-1]
-            
+            # Build static header parts (version + prevhash + nbits) - only once per batch
             header_buf[0:4] = version_bytes
             header_buf[4:36] = prevhash_bytes
             header_buf[68:72] = nbits_bytes
+            header_buf[72:76] = ntime_bytes
             
-            # Ultra-optimized inner loop (no GIL blocking!)
+            # Precompute coinbase template (coinb1 + extranonce1 + coinb2)
+            # We'll insert extranonce2 in the middle
+            coinbase_template_start = coinb1_bytes + extranonce1_bytes
+            coinbase_template_end = coinb2_bytes
+            coinbase_template_len = len(coinbase_template_start) + extranonce2_size + len(coinbase_template_end)
+            
+            # Preallocate coinbase buffer (reuse across iterations)
+            coinbase_buf = bytearray(coinbase_template_len)
+            coinbase_buf[:len(coinbase_template_start)] = coinbase_template_start
+            coinbase_buf[len(coinbase_template_start)+extranonce2_size:] = coinbase_template_end
+            
+            # Ultra-optimized inner loop (no GIL blocking, minimal allocations!)
+            batch_start_time = time.time()
             for _ in range(batch_size):
                 # Build extranonce2 (little-endian, size from pool - can be 4 or 8 bytes)
                 if extranonce2_size == 8:
                     # Use 64-bit packing for 8-byte extranonce2
-                    extranonce2_bytes = struct.pack("<Q", nonce & 0xFFFFFFFFFFFFFFFF)
+                    struct.pack_into("<Q", coinbase_buf, len(coinbase_template_start), nonce & 0xFFFFFFFFFFFFFFFF)
                 else:
                     # Use 32-bit packing for 4-byte extranonce2 (default)
-                    extranonce2_bytes = pack_i("<I", nonce & nonce_mask)
+                    struct.pack_into("<I", coinbase_buf, len(coinbase_template_start), nonce & nonce_mask)
                 
-                # Build coinbase: coinb1 + extranonce1 + extranonce2 + coinb2
-                coinbase = bytes.fromhex(coinb1) + bytes.fromhex(extranonce1) + extranonce2_bytes + bytes.fromhex(coinb2)
-                
-                # Compute coinbase hash (double SHA256)
-                coinbase_hash = sha256(sha256(coinbase).digest()).digest()
+                # Compute coinbase hash (double SHA256) - using optimized backend
+                coinbase_hash = sha256d(bytes(coinbase_buf))
                 
                 # Compute merkle root from coinbase_hash + merkle_branches
                 # Each branch is combined with current hash: dSHA256(left || right)
                 merkle_root = coinbase_hash
-                for branch in merkle_branches:
-                    branch_bytes = bytes.fromhex(branch)
-                    merkle_root = sha256(sha256(merkle_root + branch_bytes).digest()).digest()
+                for branch_bytes in merkle_branches_bytes:
+                    merkle_root = sha256d(merkle_root + branch_bytes)
                 
-                # Build complete header
+                # Build complete header - only mutate merkle root and nonce
                 merkle_root_bytes = merkle_root[::-1]  # Reverse for little-endian
                 header_buf[36:68] = merkle_root_bytes
-                header_buf[72:76] = ntime_bytes
                 header_buf[76:80] = pack_i("<I", nonce)
                 
-                # Double SHA-256
-                hash1 = sha256(bytes(header_buf)).digest()
-                hash2 = sha256(hash1).digest()
+                # Double SHA-256 of header - using optimized backend
+                hash2 = sha256d(bytes(header_buf))
+                
                 # Convert hash to integer for comparison with target
                 # Bitcoin compares hashes as BIG-ENDIAN integers
-                # The target is also a big-endian integer: 0x00000000FFFF0000...
                 hash_int = from_bytes(hash2, byteorder="big")
                 
-                # Debug: log first few hash comparisons to verify target (works in multiprocessing)
-                if debug_mode and loop_count < 10:
+                # Debug: log first few hash checks ONCE per job (outside hot loop, only first iteration)
+                if debug_mode and debug_hash_count < 10 and loop_count < 10:
                     import sys
-                    hash_hex_full = hex(hash_int)
-                    target_hex_full = hex(target)
-                    # Also show the raw hash bytes for debugging
-                    hash_bytes_repr = hash2.hex()[:32]  # First 16 bytes as hex
+                    ratio = hash_int / target if target > 0 else 0
+                    hash_order = len(str(hash_int))
+                    target_order = len(str(target))
                     debug_msg = f"[DEBUG Worker {worker_id}] Hash check #{loop_count}:\n"
                     debug_msg += f"  Raw hash bytes (hex): {hash2.hex()}\n"
                     debug_msg += f"  Hash as int (big-endian): {hash_int}\n"
                     debug_msg += f"  Target as int (big-endian): {target}\n"
                     debug_msg += f"  Hash < target: {hash_int < target}\n"
-                    # Also check if hash is close to target (within 10% to see if we're in the right ballpark)
-                    if target > 0:
-                        ratio = hash_int / target
-                        debug_msg += f"  Hash/target ratio: {ratio:.2e} (hash is {ratio*100:.1f}% of target)\n"
-                        # Check if we're even in the right order of magnitude
-                        hash_order = len(str(hash_int))
-                        target_order = len(str(target))
-                        debug_msg += f"  Hash order of magnitude: 10^{hash_order-1}, Target: 10^{target_order-1}\n"
+                    debug_msg += f"  Hash/target ratio: {ratio:.2e} (hash is {ratio*100:.1f}% of target)\n"
+                    debug_msg += f"  Hash order of magnitude: 10^{hash_order-1}, Target: 10^{target_order-1}\n"
                     sys.stdout.write(debug_msg)
                     sys.stdout.flush()
+                    debug_hash_count += 1
                 
                 if hash_int < target:
                     # Found a share! Submit via queue (main process will handle it)
@@ -228,6 +397,10 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                         print(f"[DEBUG Worker {worker_id}] ✓ SHARE FOUND! job_id={job_id}, hash={hash2.hex()[:16]}..., target={hex(target)[:20]}...")
                     try:
                         # Convert extranonce2 to hex (must match extranonce2_size)
+                        if extranonce2_size == 8:
+                            extranonce2_bytes = struct.pack("<Q", nonce & 0xFFFFFFFFFFFFFFFF)
+                        else:
+                            extranonce2_bytes = pack_i("<I", nonce & nonce_mask)
                         extranonce2_hex = extranonce2_bytes.hex()
                         share_queue.put((job_id, extranonce2_hex, ntime_bytes.hex(), nonce), block=False)
                         if debug_mode:
@@ -246,6 +419,8 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 if nonce >= nonce_end:
                     nonce = nonce_start
             
+            batch_time = time.time() - batch_start_time
+            
             # Update shared memory less frequently (every batch) - use 64-bit unsigned
             lock_start = time.time()
             with shared_total_hashes.get_lock():
@@ -259,8 +434,12 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                     shared_total_hashes.value = (current + batch_size) % (2**63 - 1)
             
             batch_count += 1
-            batch_time = time.time() - last_batch_time
             last_batch_time = time.time()
+            
+            # Profile mode: log batch performance
+            if PROFILE_MODE and (batch_count <= 5 or batch_count % 100 == 0):
+                batch_hps = batch_size / batch_time if batch_time > 0 else 0
+                print(f"[PROFILE Worker {worker_id}] Batch {batch_count}: {batch_hps:.0f} H/s, time={batch_time:.3f}s")
             
             # #region agent log
             if batch_count <= 5 or batch_count % 100 == 0:  # Log first 5 batches, then every 100th
@@ -799,7 +978,7 @@ def main():
     """Main entry point"""
     import multiprocessing
     
-    global DEBUG_STRATUM, TEST_LOW_DIFF
+    global DEBUG_STRATUM, TEST_LOW_DIFF, BENCH_MODE, PROFILE_MODE
     
     # Parse command line arguments
     num_threads = multiprocessing.cpu_count()
@@ -809,17 +988,28 @@ def main():
                 DEBUG_STRATUM = True
             elif arg == "--test-low-diff":
                 TEST_LOW_DIFF = True
+            elif arg == "--bench":
+                BENCH_MODE = True
+            elif arg == "--profile":
+                PROFILE_MODE = True
             elif arg == "--cli":
                 num_threads = multiprocessing.cpu_count()
             else:
                 try:
                     num_threads = int(arg)
                 except ValueError:
-                    print(f"Usage: {sys.argv[0]} [num_threads] [--debug-stratum] [--test-low-diff]")
+                    print(f"Usage: {sys.argv[0]} [num_threads] [--debug-stratum] [--test-low-diff] [--bench] [--profile]")
                     print(f"       {sys.argv[0]} --cli  # Use all CPU cores")
+                    print(f"       {sys.argv[0]} --bench  # Benchmark mode (no Stratum)")
+                    print(f"       {sys.argv[0]} --profile  # Profile mode (show performance stats)")
                     sys.exit(1)
     else:
         num_threads = multiprocessing.cpu_count()
+    
+    # Benchmark mode: test hashing performance without Stratum
+    if BENCH_MODE:
+        run_benchmark(num_threads)
+        return
     
     miner = StratumMiner()
     
