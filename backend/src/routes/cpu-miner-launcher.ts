@@ -950,33 +950,20 @@ except Exception as e:
     print(f"Error reading script: {e}", file=sys.stderr)
     sys.exit(1)
 
-# Escape values for safe replacement in Python strings
-def escape_for_python(s):
-    if s is None:
-        return ""
-    # Escape special characters for Python string literals
-    return str(s).replace('\\\\', '\\\\\\\\').replace('"', '\\\\"').replace('$', '\\\\$').replace('\\n', '\\\\n').replace('\\r', '\\\\r')
-
-# Values are passed directly from shell (already expanded)
-# Escape and quote strings properly for Python string literals
-def safe_replace(placeholder, value, is_string=True):
-    if is_string:
-        # For string placeholders like "{{USER_EMAIL}}", replace with quoted escaped value
-        escaped = str(value).replace('\\\\', '\\\\\\\\').replace('"', '\\\\"').replace('$', '\\\\$')
-        return f'"{escaped}"'
-    else:
-        # For numeric placeholders like {{STRATUM_PORT}}, replace with raw number
-        return str(value)
+# Use json.dumps for safe string escaping (handles all special characters)
+import json
 
 # Replace placeholders (shell variables are expanded before Python sees this code)
+# For string placeholders, use json.dumps to properly quote and escape
+# For numeric placeholders, use raw value
 replacements = {
-    '{{USER_EMAIL}}': safe_replace('{{USER_EMAIL}}', "$USER_EMAIL"),
-    '{{BTC_WALLET}}': safe_replace('{{BTC_WALLET}}', "$WALLET"),
-    '{{STRATUM_HOST}}': safe_replace('{{STRATUM_HOST}}', "$STRATUM_HOST"),
-    '{{STRATUM_PORT}}': safe_replace('{{STRATUM_PORT}}', "$STRATUM_PORT", is_string=False),
-    '{{WORKER_NAME}}': safe_replace('{{WORKER_NAME}}', "$WORKER"),
-    '{{API_URL}}': safe_replace('{{API_URL}}', "$API_URL"),
-    '{{AUTH_TOKEN}}': safe_replace('{{AUTH_TOKEN}}', "$AUTH_TOKEN"),
+    '{{USER_EMAIL}}': json.dumps(str("$USER_EMAIL")),
+    '{{BTC_WALLET}}': json.dumps(str("$WALLET")),
+    '{{STRATUM_HOST}}': json.dumps(str("$STRATUM_HOST")),
+    '{{STRATUM_PORT}}': str("$STRATUM_PORT"),  # Numeric, no quotes
+    '{{WORKER_NAME}}': json.dumps(str("$WORKER")),
+    '{{API_URL}}': json.dumps(str("$API_URL")),
+    '{{AUTH_TOKEN}}': json.dumps(str("$AUTH_TOKEN")),
 }
 
 for placeholder, value in replacements.items():
