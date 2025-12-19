@@ -169,9 +169,9 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 hash2 = sha256(hash1).digest()
                 # Convert hash to integer for comparison with target
                 # CRITICAL: Bitcoin compares hashes as LITTLE-ENDIAN integers!
-                # The hash bytes must be reversed before converting to integer
-                # This is why block hashes are displayed in big-endian hex but compared as little-endian ints
-                hash_int = from_bytes(hash2[::-1], byteorder="big")
+                # Use byteorder="little" to interpret the hash bytes correctly
+                # Block hashes are displayed in big-endian hex but compared as little-endian integers
+                hash_int = from_bytes(hash2, byteorder="little")
                 
                 # Debug: log first few hash comparisons to verify target (works in multiprocessing)
                 if debug_mode and loop_count < 10:
