@@ -113,16 +113,18 @@ router.delete('/cleanup', authMiddleware, async (req: AuthenticatedRequest, res:
     }
 
     const userId = req.user!.id;
-    const { olderThanMinutes = 10 } = req.query; // Default: delete sessions older than 10 minutes
+    const olderThanMinutesParam = req.query.olderThanMinutes;
+    const olderThanMinutes = olderThanMinutesParam ? parseInt(olderThanMinutesParam as string) : 10;
 
-    const cutoffTime = new Date(Date.now() - parseInt(olderThanMinutes as string) * 60 * 1000).toISOString();
+    const cutoffTime = new Date(Date.now() - olderThanMinutes * 60 * 1000).toISOString();
 
     // Delete old sessions for this user that haven't been updated recently
+    // Handle both updated_at and created_at (in case updated_at is null)
     const { data, error } = await supabase
       .from('mining_sessions')
       .delete()
       .eq('user_id', userId)
-      .lt('updated_at', cutoffTime)
+      .or(`updated_at.lt.${cutoffTime},and(updated_at.is.null,created_at.lt.${cutoffTime})`)
       .select();
 
     if (error) {
