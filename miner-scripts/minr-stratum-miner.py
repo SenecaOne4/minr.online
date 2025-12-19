@@ -194,7 +194,26 @@ class StratumMiner:
         # #endregion
         
         loop_count = 0
-        while self.running and self.current_job and self.current_job.get("job_id") == job_id:
+        # Main mining loop - restart when new jobs arrive
+        while self.running:
+            # Get current job (may change during mining)
+            current_job = self.current_job
+            if not current_job:
+                time.sleep(0.1)  # Wait for job
+                continue
+            
+            # Update job info if it changed
+            current_job_id = current_job.get("job_id", "")
+            if current_job_id != job_id:
+                job_id = current_job_id
+                job = current_job
+                target = job.get("target", 0x00000000FFFF0000000000000000000000000000000000000000000000000000)
+                if isinstance(target, str):
+                    target = int(target, 16)
+                # Reset nonce range for new job
+                nonce = worker_id * 0x1000000
+                max_nonce = (worker_id + 1) * 0x1000000
+            
             try:
                 # Build extranonce2 (4 bytes, little-endian)
                 extranonce2 = struct.pack("<I", nonce & 0xFFFFFFFF)
@@ -230,7 +249,7 @@ class StratumMiner:
                                 "timestamp": time.time() * 1000,
                                 "location": "minr-stratum-miner.py:mine_worker:loop_iteration",
                                 "message": "Mining loop iteration",
-                                "data": {"worker_id": worker_id, "loop_count": loop_count, "total_hashes": self.total_hashes, "nonce": nonce},
+                                "data": {"worker_id": worker_id, "loop_count": loop_count, "total_hashes": self.total_hashes, "nonce": nonce, "job_id": job_id},
                                 "sessionId": "debug-session",
                                 "runId": "run1",
                                 "hypothesisId": "D"
@@ -255,7 +274,8 @@ class StratumMiner:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Worker {worker_id} error: {e}")
                 import traceback
                 traceback.print_exc()
-                break
+                time.sleep(0.1)  # Brief pause before retrying
+                continue  # Continue loop instead of breaking
     
     def submit_share(self, job_id: str, extranonce2: bytes, ntime: bytes, nonce: int):
         """Submit a share to the pool"""
