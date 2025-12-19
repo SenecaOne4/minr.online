@@ -67,6 +67,21 @@ router.post('/', async (req: any, res: Response) => {
           .or(`username.eq.${emailPrefix},username.ilike.${emailPrefix}%`)
           .limit(1);
         
+        // If that fails, try just prefix match
+        if ((profileError1 || !profilesByUsername || profilesByUsername.length === 0)) {
+          const { data: profilesByPrefix, error: profileError2 } = await supabase
+            .from('profiles')
+            .select('id')
+            .ilike('username', `${emailPrefix}%`)
+            .limit(1);
+          
+          if (!profileError2 && profilesByPrefix && profilesByPrefix.length > 0) {
+            userProfile = profilesByPrefix[0];
+          }
+        } else {
+          userProfile = profilesByUsername[0];
+        }
+        
         if (!profileError1 && profilesByUsername && profilesByUsername.length > 0) {
           userProfile = profilesByUsername[0];
           userId = userProfile.id;
