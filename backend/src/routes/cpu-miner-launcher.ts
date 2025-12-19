@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { AuthenticatedRequest, authMiddleware } from '../middleware/auth';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { existsSync } from 'fs';
 
 const router: Router = Router();
 
@@ -106,7 +107,22 @@ router.get('/script', authMiddleware, async (req: AuthenticatedRequest, res: Res
   try {
     // Resolve path: from dist/routes/ go up to project root, then to miner-scripts
     // In production: /var/www/minr-online/backend/dist/routes/ -> /var/www/minr-online/miner-scripts/
-    const scriptPath = join(__dirname, '../../../miner-scripts/minr-stratum-miner.py');
+    // Try multiple path resolutions
+    let scriptPath = join(__dirname, '../../../miner-scripts/minr-stratum-miner.py');
+    if (!existsSync(scriptPath)) {
+      // Alternative: from backend/dist/routes/ -> backend/../miner-scripts/
+      scriptPath = join(__dirname, '../../../../miner-scripts/minr-stratum-miner.py');
+    }
+    if (!existsSync(scriptPath)) {
+      // Fallback: absolute path (production)
+      scriptPath = '/var/www/minr-online/miner-scripts/minr-stratum-miner.py';
+    }
+    
+    if (!existsSync(scriptPath)) {
+      console.error('[cpu-miner-launcher] Python script not found at:', scriptPath);
+      return res.status(500).json({ error: 'Miner script not found' });
+    }
+    
     const script = readFileSync(scriptPath, 'utf-8');
     
     res.setHeader('Content-Type', 'text/x-python');
