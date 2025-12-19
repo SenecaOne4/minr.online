@@ -133,7 +133,37 @@ class StratumMiner:
     
     def mine_worker(self, worker_id: int):
         """Mining worker thread"""
+        # #region agent log
+        import json
+        try:
+            with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({
+                    "timestamp": time.time() * 1000,
+                    "location": "minr-stratum-miner.py:mine_worker:entry",
+                    "message": "Mining worker thread started",
+                    "data": {"worker_id": worker_id, "has_current_job": self.current_job is not None},
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A"
+                }) + "\n")
+        except: pass
+        # #endregion
+        
         if not self.current_job:
+            # #region agent log
+            try:
+                with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({
+                        "timestamp": time.time() * 1000,
+                        "location": "minr-stratum-miner.py:mine_worker:no_job",
+                        "message": "No current job, exiting worker",
+                        "data": {"worker_id": worker_id},
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "B"
+                    }) + "\n")
+            except: pass
+            # #endregion
             return
         
         job = self.current_job
@@ -148,31 +178,84 @@ class StratumMiner:
         nonce = worker_id * 0x1000000  # Each thread gets a range
         max_nonce = (worker_id + 1) * 0x1000000
         
+        # #region agent log
+        try:
+            with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({
+                    "timestamp": time.time() * 1000,
+                    "location": "minr-stratum-miner.py:mine_worker:loop_start",
+                    "message": "Entering mining loop",
+                    "data": {"worker_id": worker_id, "job_id": job_id, "nonce_start": nonce, "max_nonce": max_nonce, "running": self.running},
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "C"
+                }) + "\n")
+        except: pass
+        # #endregion
+        
+        loop_count = 0
         while self.running and self.current_job and self.current_job.get("job_id") == job_id:
-            # Build extranonce2 (4 bytes, little-endian)
-            extranonce2 = struct.pack("<I", nonce & 0xFFFFFFFF)
-            
-            # Build ntime (current time, 4 bytes, little-endian)
-            ntime = struct.pack("<I", int(time.time()))
-            
-            # Build block header
-            header = self.build_block_header(job, extranonce2, ntime, nonce)
-            
-            # Check if share meets target
-            if self.check_share(header, target):
-                # Found a share!
-                self.submit_share(job_id, extranonce2, ntime, nonce)
-            
-            self.total_hashes += 1
-            
-            # Increment nonce
-            nonce += 1
-            if nonce >= max_nonce:
-                nonce = worker_id * 0x1000000  # Wrap around
-            
-            # Small sleep to prevent 100% CPU
-            if self.total_hashes % 10000 == 0:
-                time.sleep(0.001)
+            try:
+                # Build extranonce2 (4 bytes, little-endian)
+                extranonce2 = struct.pack("<I", nonce & 0xFFFFFFFF)
+                
+                # Build ntime (current time, 4 bytes, little-endian)
+                ntime = struct.pack("<I", int(time.time()))
+                
+                # Build block header
+                header = self.build_block_header(job, extranonce2, ntime, nonce)
+                
+                # Check if share meets target
+                if self.check_share(header, target):
+                    # Found a share!
+                    self.submit_share(job_id, extranonce2, ntime, nonce)
+                
+                self.total_hashes += 1
+                loop_count += 1
+                
+                # Increment nonce
+                nonce += 1
+                if nonce >= max_nonce:
+                    nonce = worker_id * 0x1000000  # Wrap around
+                
+                # Small sleep to prevent 100% CPU
+                if self.total_hashes % 10000 == 0:
+                    time.sleep(0.001)
+                    
+                # #region agent log
+                if loop_count == 1 or loop_count % 100000 == 0:
+                    try:
+                        with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
+                            f.write(json.dumps({
+                                "timestamp": time.time() * 1000,
+                                "location": "minr-stratum-miner.py:mine_worker:loop_iteration",
+                                "message": "Mining loop iteration",
+                                "data": {"worker_id": worker_id, "loop_count": loop_count, "total_hashes": self.total_hashes, "nonce": nonce},
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "D"
+                            }) + "\n")
+                    except: pass
+                # #endregion
+            except Exception as e:
+                # #region agent log
+                try:
+                    with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({
+                            "timestamp": time.time() * 1000,
+                            "location": "minr-stratum-miner.py:mine_worker:exception",
+                            "message": "Exception in mining loop",
+                            "data": {"worker_id": worker_id, "error": str(e), "error_type": type(e).__name__},
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "E"
+                        }) + "\n")
+                except: pass
+                # #endregion
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Worker {worker_id} error: {e}")
+                import traceback
+                traceback.print_exc()
+                break
     
     def submit_share(self, job_id: str, extranonce2: bytes, ntime: bytes, nonce: int):
         """Submit a share to the pool"""
