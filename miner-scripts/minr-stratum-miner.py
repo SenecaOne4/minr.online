@@ -177,11 +177,21 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 if debug_mode and loop_count < 10:
                     hash_hex_full = hex(hash_int)
                     target_hex_full = hex(target)
-                    print(f"[DEBUG Worker {worker_id}] Hash check #{loop_count}: hash_int={hash_int}, hash_hex={hash_hex_full}, target_int={target}, target_hex={target_hex_full}, hash < target = {hash_int < target}")
+                    # Also show the raw hash bytes for debugging
+                    hash_bytes_repr = hash2.hex()[:32]  # First 16 bytes as hex
+                    print(f"[DEBUG Worker {worker_id}] Hash check #{loop_count}:")
+                    print(f"  Raw hash bytes (hex): {hash2.hex()}")
+                    print(f"  Hash as int (big-endian): {hash_int}")
+                    print(f"  Target as int: {target}")
+                    print(f"  Hash < target: {hash_int < target}")
                     # Also check if hash is close to target (within 10% to see if we're in the right ballpark)
                     if target > 0:
                         ratio = hash_int / target
-                        print(f"[DEBUG Worker {worker_id}] Hash/target ratio: {ratio:.2f} (hash is {ratio*100:.1f}% of target)")
+                        print(f"  Hash/target ratio: {ratio:.2e} (hash is {ratio*100:.1f}% of target)")
+                        # Check if we're even in the right order of magnitude
+                        hash_order = len(str(hash_int))
+                        target_order = len(str(target))
+                        print(f"  Hash order of magnitude: 10^{hash_order-1}, Target: 10^{target_order-1}")
                 
                 if hash_int < target:
                     # Found a share! Submit via queue (main process will handle it)
