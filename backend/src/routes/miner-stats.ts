@@ -56,24 +56,39 @@ router.post('/', async (req: any, res: Response) => {
         // No existing session - try to find user by email prefix from workerName
         // workerName format: minr.emailprefix -> extract emailprefix
         const emailPrefix = finalWorkerName.replace('minr.', '');
+        console.log(`[miner-stats] Looking up user for emailPrefix: ${emailPrefix} from workerName: ${finalWorkerName}`);
         
-        // Try to find user by username (which might contain email prefix)
-        const { data: userProfile, error: profileError } = await supabase
+        // Try multiple lookup strategies:
+        // 1. Find by username exact match or prefix match
+        let userProfile = null;
+        const { data: profilesByUsername, error: profileError1 } = await supabase
           .from('profiles')
           .select('id')
-          .ilike('username', `${emailPrefix}%`)
-          .limit(1)
-          .single();
+          .or(`username.eq.${emailPrefix},username.ilike.${emailPrefix}%`)
+          .limit(1);
         
-        if (!profileError && userProfile) {
+        if (!profileError1 && profilesByUsername && profilesByUsername.length > 0) {
+          userProfile = profilesByUsername[0];
           userId = userProfile.id;
           console.log(`[miner-stats] Found userId ${userId} from profile username match for worker ${finalWorkerName}`);
         } else {
-          // Last resort: try to find by listing auth users (if we have admin access)
+          // 2. Last resort: try to find by listing auth users (if we have admin access)
           try {
             const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-            if (!authError && authUsers) {
-              const matchingUser = authUsers.users.find(u => u.email?.startsWith(emailPrefix));
+            if (!authError && authUsers && authUsers.users) {
+              // Try exact email match first, then prefix match
+              let matchingUser = authUsers.users.find(u => 
+                u.email?.toLowerCase() === `${emailPrefix}@`.toLowerCase() || 
+                u.email?.toLowerCase().startsWith(`${emailPrefix}@`.toLowerCase())
+              );
+              
+              // If no match, try prefix without @
+              if (!matchingUser) {
+                matchingUser = authUsers.users.find(u => 
+                  u.email?.toLowerCase().startsWith(emailPrefix.toLowerCase())
+                );
+              }
+              
               if (matchingUser) {
                 userId = matchingUser.id;
                 // Create profile if it doesn't exist
@@ -81,7 +96,9 @@ router.post('/', async (req: any, res: Response) => {
                   id: userId, 
                   username: emailPrefix 
                 }, { onConflict: 'id' });
-                console.log(`[miner-stats] Found userId ${userId} from auth.users and created profile for worker ${finalWorkerName}`);
+                console.log(`[miner-stats] Found userId ${userId} from auth.users (email: ${matchingUser.email}) and created profile for worker ${finalWorkerName}`);
+              } else {
+                console.log(`[miner-stats] No matching user found for emailPrefix: ${emailPrefix}`);
               }
             }
           } catch (e) {
