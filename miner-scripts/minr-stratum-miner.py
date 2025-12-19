@@ -190,8 +190,10 @@ class StratumMiner:
         hash_result = self.reverse_bytes(self.double_sha256(header))
         hash_int = int.from_bytes(hash_result, byteorder="big")
         return hash_int < target
-    
-    def mine_worker_process(self, worker_id: int, shared_total_hashes, shared_running, shared_job, share_queue):
+
+
+# Standalone function for multiprocessing (must be outside class to avoid pickling issues)
+def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, shared_job, share_queue):
         """Mining worker process (multiprocessing - bypasses GIL for true parallelism)"""
         # Wait for first job
         while shared_running.value and not shared_job:
