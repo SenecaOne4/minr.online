@@ -905,45 +905,102 @@ WALLET=$(cat "$CONFIG_FILE" | grep -o '"wallet": "[^"]*"' | cut -d'"' -f4)
 WORKER=$(cat "$CONFIG_FILE" | grep -o '"worker": "[^"]*"' | cut -d'"' -f4)
 USER_EMAIL=$(cat "$CONFIG_FILE" | grep -o '"user_email": "[^"]*"' | cut -d'"' -f4 || echo "user")
 
+# Export variables for Python script
+export USER_EMAIL
+export WALLET
+export STRATUM_HOST
+export STRATUM_PORT
+export WORKER
+export API_URL
+export AUTH_TOKEN
+
+log "Parsed configuration: host=$STRATUM_HOST, port=$STRATUM_PORT, wallet=$WALLET"
+
 # Replace placeholders in Python script using Python (more reliable than sed)
 log "Configuring miner script..."
+
+# Verify variables are set
+if [ -z "$STRATUM_HOST" ] || [ -z "$STRATUM_PORT" ] || [ -z "$WALLET" ]; then
+    log "Error: Configuration variables are empty"
+    log "STRATUM_HOST: $STRATUM_HOST"
+    log "STRATUM_PORT: $STRATUM_PORT"
+    log "WALLET: $WALLET"
+    update_status "error" "Configuration incomplete" 0
+    exit 1
+fi
+
+# Use Python to replace placeholders (more reliable than sed)
 python3 << PYTHON_REPLACE_EOF
 import sys
-import re
+import os
+
+script_path = os.path.expanduser("$MINER_SCRIPT")
 
 # Read miner script
-with open("$MINER_SCRIPT", 'r') as f:
-    content = f.read()
+try:
+    with open(script_path, 'r') as f:
+        content = f.read()
+except Exception as e:
+    print(f"Error reading script: {e}", file=sys.stderr)
+    sys.exit(1)
 
-# Escape values for safe replacement
+# Escape values for safe replacement in Python strings
 def escape_for_python(s):
-    return s.replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$')
+    if s is None:
+        return ""
+    return str(s).replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$').replace('\n', '\\n').replace('\r', '\\r')
+
+# Get values from environment (passed via shell variables)
+import os
+user_email = os.environ.get('USER_EMAIL', '$USER_EMAIL')
+btc_wallet = os.environ.get('WALLET', '$WALLET')
+stratum_host = os.environ.get('STRATUM_HOST', '$STRATUM_HOST')
+stratum_port = os.environ.get('STRATUM_PORT', '$STRATUM_PORT')
+worker_name = os.environ.get('WORKER', '$WORKER')
+api_url = os.environ.get('API_URL', '$API_URL')
+auth_token = os.environ.get('AUTH_TOKEN', '$AUTH_TOKEN')
 
 # Replace placeholders
 replacements = {
-    '{{USER_EMAIL}}': escape_for_python("$USER_EMAIL"),
-    '{{BTC_WALLET}}': escape_for_python("$WALLET"),
-    '{{STRATUM_HOST}}': escape_for_python("$STRATUM_HOST"),
-    '{{STRATUM_PORT}}': "$STRATUM_PORT",
-    '{{WORKER_NAME}}': escape_for_python("$WORKER"),
-    '{{API_URL}}': escape_for_python("$API_URL"),
-    '{{AUTH_TOKEN}}': escape_for_python("$AUTH_TOKEN"),
+    '{{USER_EMAIL}}': escape_for_python(user_email),
+    '{{BTC_WALLET}}': escape_for_python(btc_wallet),
+    '{{STRATUM_HOST}}': escape_for_python(stratum_host),
+    '{{STRATUM_PORT}}': stratum_port,  # Port is numeric, no quotes needed
+    '{{WORKER_NAME}}': escape_for_python(worker_name),
+    '{{API_URL}}': escape_for_python(api_url),
+    '{{AUTH_TOKEN}}': escape_for_python(auth_token),
 }
 
 for placeholder, value in replacements.items():
     content = content.replace(placeholder, value)
 
-# Write back
-with open("$MINER_SCRIPT", 'w') as f:
-    f.write(content)
+# Verify replacements worked
+if '{{' in content:
+    remaining = [line for line in content.split('\\n') if '{{' in line][:5]
+    print(f"Warning: Some placeholders not replaced: {remaining}", file=sys.stderr)
 
-print("Placeholders replaced successfully")
+# Write back
+try:
+    with open(script_path, 'w') as f:
+        f.write(content)
+    print("Placeholders replaced successfully")
+except Exception as e:
+    print(f"Error writing script: {e}", file=sys.stderr)
+    sys.exit(1)
 PYTHON_REPLACE_EOF
 
-if [ $? -ne 0 ]; then
-    log "Error: Failed to configure miner script"
+PYTHON_EXIT=$?
+if [ $PYTHON_EXIT -ne 0 ]; then
+    log "Error: Failed to configure miner script (exit code: $PYTHON_EXIT)"
     update_status "error" "Failed to configure miner script" 0
     exit 1
+fi
+
+# Verify the script was configured
+if grep -q "{{" "$MINER_SCRIPT" 2>/dev/null; then
+    log "Warning: Some placeholders may not have been replaced"
+    log "Checking script content..."
+    grep "{{" "$MINER_SCRIPT" | head -3
 fi
 
 log "Miner script configured successfully"
