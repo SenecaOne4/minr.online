@@ -104,7 +104,9 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
 // GET /api/cpu-miner-launcher/script - Get Python miner script
 router.get('/script', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const scriptPath = join(__dirname, '../../../../miner-scripts/minr-stratum-miner.py');
+    // Resolve path: from dist/routes/ go up to project root, then to miner-scripts
+    // In production: /var/www/minr-online/backend/dist/routes/ -> /var/www/minr-online/miner-scripts/
+    const scriptPath = join(__dirname, '../../../miner-scripts/minr-stratum-miner.py');
     const script = readFileSync(scriptPath, 'utf-8');
     
     res.setHeader('Content-Type', 'text/x-python');
