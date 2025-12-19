@@ -123,17 +123,20 @@ router.delete('/cleanup', authMiddleware, async (req: AuthenticatedRequest, res:
       .from('mining_sessions')
       .delete()
       .eq('user_id', userId)
-      .lt('updated_at', cutoffTime);
+      .lt('updated_at', cutoffTime)
+      .select();
 
     if (error) {
       console.error('[miner-stats] Error cleaning up sessions:', error);
       return res.status(500).json({ error: 'Failed to clean up sessions' });
     }
 
+    const deletedCount = Array.isArray(data) ? data.length : 0;
+
     res.json({ 
       success: true, 
       message: `Cleaned up sessions older than ${olderThanMinutes} minutes`,
-      deletedCount: data?.length || 0
+      deletedCount
     });
   } catch (error: any) {
     console.error('[miner-stats] Error:', error);
