@@ -14,6 +14,7 @@ import json
 import socket
 import struct
 import threading
+import multiprocessing
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -159,37 +160,7 @@ class StratumMiner:
     
     def mine_worker(self, worker_id: int):
         """Mining worker thread"""
-        # #region agent log
-        import json
-        try:
-            with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "timestamp": time.time() * 1000,
-                    "location": "minr-stratum-miner.py:mine_worker:entry",
-                    "message": "Mining worker thread started",
-                    "data": {"worker_id": worker_id, "has_current_job": self.current_job is not None},
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "A"
-                }) + "\n")
-        except: pass
-        # #endregion
-        
         if not self.current_job:
-            # #region agent log
-            try:
-                with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({
-                        "timestamp": time.time() * 1000,
-                        "location": "minr-stratum-miner.py:mine_worker:no_job",
-                        "message": "No current job, exiting worker",
-                        "data": {"worker_id": worker_id},
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B"
-                    }) + "\n")
-            except: pass
-            # #endregion
             return
         
         job = self.current_job
@@ -203,22 +174,6 @@ class StratumMiner:
         # Mining loop
         nonce = worker_id * 0x1000000  # Each thread gets a range
         max_nonce = (worker_id + 1) * 0x1000000
-        
-        # #region agent log
-        try:
-            with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "timestamp": time.time() * 1000,
-                    "location": "minr-stratum-miner.py:mine_worker:loop_start",
-                    "message": "Entering mining loop",
-                    "data": {"worker_id": worker_id, "job_id": job_id, "nonce_start": nonce, "max_nonce": max_nonce, "running": self.running},
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "C"
-                }) + "\n")
-        except: pass
-        # #endregion
-        
         loop_count = 0
         # Main mining loop - restart when new jobs arrive
         while self.running:
@@ -241,90 +196,68 @@ class StratumMiner:
                 max_nonce = (worker_id + 1) * 0x1000000
             
             try:
-                # MAXIMUM PERFORMANCE: Pre-compute everything possible
+                # ULTRA PERFORMANCE: Pre-compute everything possible
                 # Cache static header parts (don't rebuild every iteration)
                 static_header = self.build_static_header(job)
+                static_len = len(static_header)
                 
                 # Cache methods locally to avoid attribute lookups in hot loop
                 submit_share = self.submit_share
                 pack_i = struct.pack
-                double_sha256 = self.double_sha256
-                reverse_bytes = self.reverse_bytes
+                sha256 = hashlib.sha256  # Direct access to hashlib function
+                from_bytes = int.from_bytes
                 
-                # Process large batches for maximum throughput
-                batch_size = 10000  # Larger batches = less overhead
+                # Process HUGE batches for maximum throughput (less overhead)
+                batch_size = 50000  # Massive batches = minimal overhead
                 current_time = int(time.time())
                 ntime_bytes = pack_i("<I", current_time)
                 
-                # Pre-allocate bytearray for header (faster than concatenation)
+                # Pre-allocate bytearray for header (reuse across iterations)
                 header_buf = bytearray(80)  # Bitcoin header is 80 bytes
-                header_buf[:len(static_header)] = static_header
-                static_len = len(static_header)
+                header_buf[:static_len] = static_header
                 
-                for batch_iter in range(batch_size):
-                    # Build extranonce2 and nonce bytes (minimal operations)
-                    nonce_low = nonce & 0xFFFFFFFF
-                    extranonce2 = pack_i("<I", nonce_low)
+                # Pre-compute constants
+                nonce_mask = 0xFFFFFFFF
+                nonce_start = worker_id * 0x1000000
+                nonce_end = (worker_id + 1) * 0x1000000
+                
+                # Ultra-optimized inner loop
+                for _ in range(batch_size):
+                    # Build nonce bytes (minimal operations)
+                    nonce_low = nonce & nonce_mask
+                    extranonce2_bytes = pack_i("<I", nonce_low)
                     nonce_bytes = pack_i("<I", nonce)
                     
-                    # Build complete header using bytearray (faster than concatenation)
-                    header_buf[static_len:static_len+4] = extranonce2
+                    # Build complete header using bytearray (in-place, no allocation)
+                    header_buf[static_len:static_len+4] = extranonce2_bytes
                     header_buf[static_len+4:static_len+8] = ntime_bytes
                     header_buf[static_len+8:static_len+12] = nonce_bytes
-                    header = bytes(header_buf)
                     
-                    # Check share (inline hash check for speed - no function call overhead)
-                    hash_result = reverse_bytes(double_sha256(header))
-                    hash_int = int.from_bytes(hash_result, byteorder="big")
+                    # Double SHA-256 (inline, no function call overhead)
+                    hash1 = sha256(bytes(header_buf)).digest()
+                    hash2 = sha256(hash1).digest()
+                    hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse inline
                     
                     if hash_int < target:
                         # Found a share!
-                        submit_share(job_id, extranonce2, ntime_bytes, nonce)
+                        submit_share(job_id, extranonce2_bytes, ntime_bytes, nonce)
                     
-                    # Increment counters
-                    self.total_hashes += 1
+                    # Increment counters (use local variable, update instance less frequently)
                     loop_count += 1
                     nonce += 1
                     
                     # Wrap nonce if needed
-                    if nonce >= max_nonce:
-                        nonce = worker_id * 0x1000000
+                    if nonce >= nonce_end:
+                        nonce = nonce_start
                 
-                # Update time occasionally (every 10 batches = ~100k hashes)
-                if loop_count % (batch_size * 10) == 0:
+                # Update instance variable after batch (reduce lock contention)
+                self.total_hashes += batch_size
+                
+                # Update time occasionally (every 20 batches = ~1M hashes)
+                if loop_count % (batch_size * 20) == 0:
                     current_time = int(time.time())
                     ntime_bytes = pack_i("<I", current_time)
-                    
-                # #region agent log
-                if loop_count == 1 or loop_count % 100000 == 0:
-                    try:
-                        with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
-                            f.write(json.dumps({
-                                "timestamp": time.time() * 1000,
-                                "location": "minr-stratum-miner.py:mine_worker:loop_iteration",
-                                "message": "Mining loop iteration",
-                                "data": {"worker_id": worker_id, "loop_count": loop_count, "total_hashes": self.total_hashes, "nonce": nonce, "job_id": job_id},
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "D"
-                            }) + "\n")
-                    except: pass
-                # #endregion
             except Exception as e:
-                # #region agent log
-                try:
-                    with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({
-                            "timestamp": time.time() * 1000,
-                            "location": "minr-stratum-miner.py:mine_worker:exception",
-                            "message": "Exception in mining loop",
-                            "data": {"worker_id": worker_id, "error": str(e), "error_type": type(e).__name__},
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "E"
-                        }) + "\n")
-                except: pass
-                # #endregion
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Worker {worker_id} error: {e}")
                 import traceback
                 traceback.print_exc()
@@ -478,42 +411,11 @@ class StratumMiner:
         while self.running and not self.current_job:
             time.sleep(0.1)
         
-        # Start mining threads
-        # #region agent log
-        import json
-        try:
-            with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "timestamp": time.time() * 1000,
-                    "location": "minr-stratum-miner.py:start:threads",
-                    "message": "Starting mining threads",
-                    "data": {"num_threads": num_threads, "has_current_job": self.current_job is not None},
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "F"
-                }) + "\n")
-        except: pass
-        # #endregion
-        
+        # Start mining threads (using threading for now - multiprocessing requires shared memory refactor)
         for i in range(num_threads):
             thread = threading.Thread(target=self.mine_worker, args=(i,), daemon=True)
             thread.start()
             self.mining_threads.append(thread)
-            
-            # #region agent log
-            try:
-                with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({
-                        "timestamp": time.time() * 1000,
-                        "location": "minr-stratum-miner.py:start:thread_started",
-                        "message": "Mining thread started",
-                        "data": {"thread_id": i, "thread_alive": thread.is_alive()},
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "G"
-                    }) + "\n")
-            except: pass
-            # #endregion
         
         # Print stats periodically and report to API
         def print_and_report_stats():
