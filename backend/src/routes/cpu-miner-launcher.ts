@@ -950,20 +950,21 @@ except Exception as e:
     print(f"Error reading script: {e}", file=sys.stderr)
     sys.exit(1)
 
-# Use json.dumps for safe string escaping (handles all special characters)
-import json
+# Use repr() for safe Python string escaping (handles all special characters)
+# repr() returns a Python string literal representation with proper escaping
+# The template already has quotes, so we just need the escaped value without quotes
 
 # Replace placeholders (shell variables are expanded before Python sees this code)
-# For string placeholders, use json.dumps to properly quote and escape
+# For string placeholders, use repr() which returns quoted string - strip outer quotes since template has them
 # For numeric placeholders, use raw value
 replacements = {
-    '{{USER_EMAIL}}': json.dumps(str("$USER_EMAIL")),
-    '{{BTC_WALLET}}': json.dumps(str("$WALLET")),
-    '{{STRATUM_HOST}}': json.dumps(str("$STRATUM_HOST")),
+    '{{USER_EMAIL}}': repr(str("$USER_EMAIL"))[1:-1],  # repr adds quotes, strip them
+    '{{BTC_WALLET}}': repr(str("$WALLET"))[1:-1],
+    '{{STRATUM_HOST}}': repr(str("$STRATUM_HOST"))[1:-1],
     '{{STRATUM_PORT}}': str("$STRATUM_PORT"),  # Numeric, no quotes
-    '{{WORKER_NAME}}': json.dumps(str("$WORKER")),
-    '{{API_URL}}': json.dumps(str("$API_URL")),
-    '{{AUTH_TOKEN}}': json.dumps(str("$AUTH_TOKEN")),
+    '{{WORKER_NAME}}': repr(str("$WORKER"))[1:-1],
+    '{{API_URL}}': repr(str("$API_URL"))[1:-1],
+    '{{AUTH_TOKEN}}': repr(str("$AUTH_TOKEN"))[1:-1],
 }
 
 for placeholder, value in replacements.items():
