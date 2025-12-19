@@ -47,9 +47,11 @@ class StratumMiner:
         self.mining_processes = []
         
         # Shared memory for multiprocessing (bypasses GIL)
+        self.manager = multiprocessing.Manager()
         self.shared_total_hashes = multiprocessing.Value('i', 0)  # Integer shared value
         self.shared_running = multiprocessing.Value('b', True)  # Boolean shared value
-        self.shared_job = multiprocessing.Manager().dict()  # Shared dict for job data
+        self.shared_job = self.manager.dict()  # Shared dict for job data
+        self.share_queue = self.manager.Queue()  # Queue for share submission
         
     def connect(self) -> bool:
         """Connect to Stratum pool"""
@@ -189,7 +191,7 @@ class StratumMiner:
         hash_int = int.from_bytes(hash_result, byteorder="big")
         return hash_int < target
     
-    def mine_worker_process(self, worker_id: int, shared_total_hashes, shared_running, shared_job):
+    def mine_worker_process(self, worker_id: int, shared_total_hashes, shared_running, shared_job, share_queue):
         """Mining worker process (multiprocessing - bypasses GIL for true parallelism)"""
         # Wait for first job
         while shared_running.value and not shared_job:
@@ -269,9 +271,11 @@ class StratumMiner:
                     hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse inline
                     
                     if hash_int < target:
-                        # Found a share! (Note: submit_share needs to be handled differently in multiprocessing)
-                        # For now, we'll need to use a queue or shared memory for share submission
-                        pass  # TODO: Implement share submission via queue
+                        # Found a share! Submit via queue (main process will handle it)
+                        try:
+                            share_queue.put((job_id, extranonce2_bytes, ntime_bytes, nonce), block=False)
+                        except:
+                            pass  # Queue full, skip this share
                     
                     # Increment local counter
                     local_hash_count += 1
@@ -449,11 +453,25 @@ class StratumMiner:
         for i in range(num_threads):
             process = multiprocessing.Process(
                 target=self.mine_worker_process,
-                args=(i, self.shared_total_hashes, self.shared_running, self.shared_job),
+                args=(i, self.shared_total_hashes, self.shared_running, self.shared_job, self.share_queue),
                 daemon=True
             )
             process.start()
             self.mining_processes.append(process)
+        
+        # Start share processor thread (processes shares from queue)
+        def process_shares():
+            while self.running:
+                try:
+                    share_data = self.share_queue.get(timeout=0.1)
+                    if share_data:
+                        job_id, extranonce2, ntime, nonce = share_data
+                        self.submit_share(job_id, extranonce2, ntime, nonce)
+                except:
+                    pass
+        
+        share_processor = threading.Thread(target=process_shares, daemon=True)
+        share_processor.start()
         
         # Print stats periodically and report to API
         def print_and_report_stats():
