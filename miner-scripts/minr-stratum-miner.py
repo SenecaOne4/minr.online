@@ -237,8 +237,17 @@ class StratumMiner:
                 target = shared_job.get("target", 0x00000000FFFF0000000000000000000000000000000000000000000000000000)
                 if isinstance(target, str):
                     target = int(target, 16)
-                # Rebuild static header for new job
-                static_header = self._build_static_header_fast(shared_job)
+                # Rebuild static header for new job (inline for multiprocessing)
+                version_str = shared_job.get("version", "20000000")
+                if isinstance(version_str, str):
+                    version_int = int(version_str, 16) if version_str.startswith(('0x', '0X')) or all(c in '0123456789abcdefABCDEF' for c in version_str) else int(version_str)
+                else:
+                    version_int = version_str
+                version_bytes = pack_i("<I", version_int)
+                prevhash_bytes = bytes.fromhex(shared_job["prevhash"])[::-1]
+                merkle_root_bytes = bytes.fromhex(shared_job["merkle_root"])[::-1]
+                nbits_bytes = bytes.fromhex(shared_job["nbits"])[::-1]
+                static_header = version_bytes + prevhash_bytes + merkle_root_bytes + nbits_bytes
                 static_len = len(static_header)
                 # Reset nonce range for new job
                 nonce = nonce_start
