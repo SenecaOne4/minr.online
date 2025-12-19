@@ -461,8 +461,11 @@ class StratumMiner:
             except: pass
             # #endregion
         
-        # Print stats periodically
-        def print_stats():
+        # Print stats periodically and report to API
+        def print_and_report_stats():
+            import urllib.request
+            import urllib.error
+            
             while self.running:
                 time.sleep(10)
                 if self.start_time:
@@ -471,8 +474,35 @@ class StratumMiner:
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Hashrate: {hashrate:.2f} H/s | "
                           f"Accepted: {self.shares_accepted} | Rejected: {self.shares_rejected} | "
                           f"Total hashes: {self.total_hashes:,}")
+                    
+                    # Report stats to API
+                    if API_URL and AUTH_TOKEN:
+                        try:
+                            stats_data = {
+                                "totalHashes": self.total_hashes,
+                                "hashesPerSecond": hashrate,
+                                "acceptedShares": self.shares_accepted,
+                                "rejectedShares": self.shares_rejected,
+                                "workerName": WORKER_NAME
+                            }
+                            
+                            req = urllib.request.Request(
+                                f"{API_URL}/api/miner-stats",
+                                data=json.dumps(stats_data).encode('utf-8'),
+                                headers={
+                                    'Content-Type': 'application/json',
+                                    'Authorization': f'Bearer {AUTH_TOKEN}'
+                                },
+                                method='POST'
+                            )
+                            
+                            with urllib.request.urlopen(req, timeout=5) as response:
+                                pass  # Stats reported successfully
+                        except Exception as e:
+                            # Silently fail - don't interrupt mining
+                            pass
         
-        stats_thread = threading.Thread(target=print_stats, daemon=True)
+        stats_thread = threading.Thread(target=print_and_report_stats, daemon=True)
         stats_thread.start()
         
         # Keep main thread alive
