@@ -953,24 +953,25 @@ def escape_for_python(s):
     return str(s).replace('\\\\', '\\\\\\\\').replace('"', '\\\\"').replace('$', '\\\\$').replace('\\n', '\\\\n').replace('\\r', '\\\\r')
 
 # Values are passed directly from shell (already expanded)
-# Use json.dumps to safely quote strings
-user_email = json.dumps(str("$USER_EMAIL")) if "$USER_EMAIL" else '""'
-btc_wallet = json.dumps(str("$WALLET")) if "$WALLET" else '""'
-stratum_host = json.dumps(str("$STRATUM_HOST")) if "$STRATUM_HOST" else '""'
-stratum_port = str("$STRATUM_PORT") if "$STRATUM_PORT" else "3333"
-worker_name = json.dumps(str("$WORKER")) if "$WORKER" else '""'
-api_url = json.dumps(str("$API_URL")) if "$API_URL" else '""'
-auth_token = json.dumps(str("$AUTH_TOKEN")) if "$AUTH_TOKEN" else '""'
+# Escape and quote strings properly for Python string literals
+def safe_replace(placeholder, value, is_string=True):
+    if is_string:
+        # For string placeholders like "{{USER_EMAIL}}", replace with quoted escaped value
+        escaped = str(value).replace('\\\\', '\\\\\\\\').replace('"', '\\\\"').replace('$', '\\\\$')
+        return f'"{escaped}"'
+    else:
+        # For numeric placeholders like {{STRATUM_PORT}}, replace with raw number
+        return str(value)
 
-# Replace placeholders
+# Replace placeholders (shell variables are expanded before Python sees this code)
 replacements = {
-    '{{USER_EMAIL}}': user_email,
-    '{{BTC_WALLET}}': btc_wallet,
-    '{{STRATUM_HOST}}': stratum_host,
-    '{{STRATUM_PORT}}': stratum_port,  # Port is numeric, no quotes needed
-    '{{WORKER_NAME}}': worker_name,
-    '{{API_URL}}': api_url,
-    '{{AUTH_TOKEN}}': auth_token,
+    '{{USER_EMAIL}}': safe_replace('{{USER_EMAIL}}', "$USER_EMAIL"),
+    '{{BTC_WALLET}}': safe_replace('{{BTC_WALLET}}', "$WALLET"),
+    '{{STRATUM_HOST}}': safe_replace('{{STRATUM_HOST}}', "$STRATUM_HOST"),
+    '{{STRATUM_PORT}}': safe_replace('{{STRATUM_PORT}}', "$STRATUM_PORT", is_string=False),
+    '{{WORKER_NAME}}': safe_replace('{{WORKER_NAME}}', "$WORKER"),
+    '{{API_URL}}': safe_replace('{{API_URL}}', "$API_URL"),
+    '{{AUTH_TOKEN}}': safe_replace('{{AUTH_TOKEN}}', "$AUTH_TOKEN"),
 }
 
 for placeholder, value in replacements.items():
