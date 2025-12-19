@@ -322,10 +322,41 @@ class StratumMiner:
             time.sleep(0.1)
         
         # Start mining threads
+        # #region agent log
+        import json
+        try:
+            with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({
+                    "timestamp": time.time() * 1000,
+                    "location": "minr-stratum-miner.py:start:threads",
+                    "message": "Starting mining threads",
+                    "data": {"num_threads": num_threads, "has_current_job": self.current_job is not None},
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "F"
+                }) + "\n")
+        except: pass
+        # #endregion
+        
         for i in range(num_threads):
             thread = threading.Thread(target=self.mine_worker, args=(i,), daemon=True)
             thread.start()
             self.mining_threads.append(thread)
+            
+            # #region agent log
+            try:
+                with open('/Users/seneca/Desktop/minr.online/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({
+                        "timestamp": time.time() * 1000,
+                        "location": "minr-stratum-miner.py:start:thread_started",
+                        "message": "Mining thread started",
+                        "data": {"thread_id": i, "thread_alive": thread.is_alive()},
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "G"
+                    }) + "\n")
+            except: pass
+            # #endregion
         
         # Print stats periodically
         def print_stats():
