@@ -95,7 +95,12 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
             nonce = nonce_start
             
             if debug_mode:
-                print(f"[DEBUG Worker {worker_id}] New job: {job_id}, target={hex(target)[:20]}..., extranonce2_size={extranonce2_size}")
+                # Print full target value (not truncated) to verify calculation
+                target_hex_full = hex(target)
+                print(f"[DEBUG Worker {worker_id}] New job: {job_id}, target_full={target_hex_full}, target_int={target}, extranonce2_size={extranonce2_size}")
+                # Also print max_target for comparison
+                max_target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
+                print(f"[DEBUG Worker {worker_id}] Max target: {hex(max_target)}, difficulty should be: {max_target // target if target > 0 else 'N/A'}")
         
         try:
             # Process batches for maximum throughput
@@ -165,7 +170,13 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 
                 # Debug: log first few hash comparisons to verify target (works in multiprocessing)
                 if debug_mode and loop_count < 10:
-                    print(f"[DEBUG Worker {worker_id}] Hash check: hash={hex(hash_int)[:20]}..., target={hex(target)[:20]}..., hash < target = {hash_int < target}")
+                    hash_hex_full = hex(hash_int)
+                    target_hex_full = hex(target)
+                    print(f"[DEBUG Worker {worker_id}] Hash check #{loop_count}: hash_int={hash_int}, hash_hex={hash_hex_full}, target_int={target}, target_hex={target_hex_full}, hash < target = {hash_int < target}")
+                    # Also check if hash is close to target (within 10% to see if we're in the right ballpark)
+                    if target > 0:
+                        ratio = hash_int / target
+                        print(f"[DEBUG Worker {worker_id}] Hash/target ratio: {ratio:.2f} (hash is {ratio*100:.1f}% of target)")
                 
                 if hash_int < target:
                     # Found a share! Submit via queue (main process will handle it)
@@ -429,7 +440,10 @@ class StratumMiner:
                 target = int(max_target // current_diff)
                 
                 if DEBUG_STRATUM:
-                    print(f"[DEBUG] Job {job_id}: difficulty={current_diff}, target={hex(target)[:20]}...")
+                    print(f"[DEBUG] Job {job_id}: difficulty={current_diff}, max_target={hex(max_target)}, target={hex(target)}, target_int={target}")
+                    # Verify target calculation
+                    if current_diff == 1.0:
+                        print(f"[DEBUG] For difficulty 1.0, target should equal max_target: {target == max_target}")
                 
                 # Update shared_job for worker processes
                 self.shared_job.update({
