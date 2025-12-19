@@ -12,55 +12,53 @@ router.post('/', async (req: any, res: Response) => {
     }
 
     const { totalHashes, hashesPerSecond, acceptedShares, rejectedShares, workerName } = req.body;
-    
-    // Validate workerName format (minr.emailprefix)
-    if (!workerName || typeof workerName !== 'string' || !workerName.startsWith('minr.')) {
-      return res.status(400).json({ error: 'Invalid workerName format' });
-    }
-    
-    // Extract email prefix from workerName (minr.emailprefix -> emailprefix)
-    const emailPrefix = workerName.replace('minr.', '');
-    
-    // Find user by email prefix (look up in auth.users via profiles)
-    // First, get all profiles and find matching email prefix
-    const { data: profiles, error: profileError } = await supabase
-      .from('profiles')
-      .select('id');
-    
-    if (profileError) {
-      console.error('[miner-stats] Error fetching profiles:', profileError);
-      return res.status(500).json({ error: 'Failed to find user' });
-    }
-    
-    // Try to find user by checking auth.users (we'll need to query via a different method)
-    // For now, use a simpler approach: try to authenticate if token provided, otherwise use workerName lookup
-    let userId: string | null = null;
-    
-    // Try auth first (if token provided)
-    if (req.headers.authorization) {
-      try {
-        // Extract token and verify (simplified - in production use proper JWT verification)
-        const token = req.headers.authorization.replace('Bearer ', '');
-        // For now, if auth token is provided, use authMiddleware logic
-        // But since we removed authMiddleware, we'll use workerName lookup instead
-      } catch (e) {
-        // Auth failed, fall back to workerName lookup
-      }
-    }
-    
-    // Look up user by email prefix in profiles (requires matching email pattern)
-    // Since we can't directly query auth.users, we'll use a workaround:
-    // Find user by checking if any profile matches the expected pattern
-    // This is a simplified approach - in production, you'd want proper user lookup
-    
-    // For now, accept the stats and try to find/create session by workerName
-    // We'll need to modify the query to work without userId
 
     if (typeof totalHashes !== 'number' || totalHashes < 0) {
       return res.status(400).json({ error: 'Invalid totalHashes' });
     }
+    
+    // Validate workerName format (minr.emailprefix)
+    if (!workerName || typeof workerName !== 'string' || !workerName.startsWith('minr.')) {
+      return res.status(400).json({ error: 'Invalid workerName format (must start with minr.)' });
+    }
 
-    const finalWorkerName = workerName || `minr.${req.user?.email?.split('@')[0] || 'user'}`;
+    const finalWorkerName = workerName;
+    
+    // Try to get userId from auth token if provided
+    let userId: string | null = null;
+    if (req.headers.authorization) {
+      try {
+        const token = req.headers.authorization.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        if (!authError && user) {
+          userId = user.id;
+        }
+      } catch (e) {
+        // Auth failed, will find user by workerName
+      }
+    }
+    
+    // If no userId from auth, find it from existing sessions with this workerName
+    if (!userId) {
+      const { data: existingSession, error: sessionError } = await supabase
+        .from('mining_sessions')
+        .select('user_id')
+        .eq('worker_name', finalWorkerName)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (!sessionError && existingSession) {
+        userId = existingSession.user_id;
+        console.log(`[miner-stats] Found userId ${userId} from existing session for worker ${finalWorkerName}`);
+      } else {
+        // No existing session - can't create one without userId
+        // Return error asking to start mining from dashboard first
+        return res.status(401).json({ 
+          error: 'No existing session found. Please start mining from the dashboard first to create a session, or provide an authentication token.' 
+        });
+      }
+    }
     
     // Find the most recent active session for this user/worker
     // Schema uses started_at (not created_at or updated_at)
