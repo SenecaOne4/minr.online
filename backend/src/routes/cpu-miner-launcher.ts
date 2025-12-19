@@ -7,6 +7,34 @@ import { existsSync } from 'fs';
 
 const router: Router = Router();
 
+// Read and base64-encode Python miner script once at module load
+function getPythonMinerScriptBase64(): string {
+  // Try multiple paths to find the Python script
+  const possiblePaths = [
+    join(__dirname, '../../../miner-scripts/minr-stratum-miner.py'),
+    join(__dirname, '../../../../miner-scripts/minr-stratum-miner.py'),
+    join(process.cwd(), 'miner-scripts/minr-stratum-miner.py'),
+    '/var/www/minr-online/miner-scripts/minr-stratum-miner.py',
+  ];
+  
+  for (const scriptPath of possiblePaths) {
+    if (existsSync(scriptPath)) {
+      try {
+        const scriptContent = readFileSync(scriptPath, 'utf-8');
+        // Base64 encode for safe embedding in bash script
+        return Buffer.from(scriptContent, 'utf-8').toString('base64');
+      } catch (error) {
+        console.error(`[cpu-miner-launcher] Error reading script from ${scriptPath}:`, error);
+      }
+    }
+  }
+  
+  console.error('[cpu-miner-launcher] Python miner script not found in any expected location');
+  return ''; // Return empty string if not found
+}
+
+const PYTHON_MINER_SCRIPT_B64 = getPythonMinerScriptBase64();
+
 // GET /api/cpu-miner-launcher - Generate personalized HTML launcher page
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -743,6 +771,7 @@ fi\`;
 }
 
 function generateMacInstallScript(authToken: string, apiUrl: string): string {
+  const pythonScriptB64 = PYTHON_MINER_SCRIPT_B64;
   return `#!/bin/bash
 # Minr.online Python Miner Installer for macOS
 # Simple installation - no C build required!
@@ -801,34 +830,26 @@ else
     log "Python 3 found: $(python3 --version)"
 fi
 
-update_status "installing" "Downloading miner script..." 60
+update_status "installing" "Writing miner script..." 60
 
-# Download Python miner script from API
+# Write Python miner script directly (embedded in installer - no API call needed)
 MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
-log "Fetching miner script from $API_URL/api/cpu-miner-launcher/script..."
+log "Writing embedded miner script..."
 
-# Use curl with timeout (30 seconds) and capture HTTP status code
-HTTP_CODE=$(curl -s -w "%{http_code}" -m 30 -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/cpu-miner-launcher/script" -o "$MINER_SCRIPT" 2>&1)
-CURL_EXIT=$?
-
-if [ $CURL_EXIT -ne 0 ] || [ "$HTTP_CODE" != "200" ]; then
-    log "Error downloading miner script. HTTP code: $HTTP_CODE, Exit code: $CURL_EXIT"
-    if [ -f "$MINER_SCRIPT" ]; then
-        ERROR_MSG=$(head -3 "$MINER_SCRIPT" 2>/dev/null || echo "Unable to read error message")
-        log "Error response: $ERROR_MSG"
-        rm -f "$MINER_SCRIPT"
-    fi
-    update_status "error" "Failed to download miner script (HTTP $HTTP_CODE). Auth token may be expired - please download a fresh HTML file." 0
+# Decode base64-encoded Python script
+echo "${pythonScriptB64}" | base64 -d > "$MINER_SCRIPT" || {
+    log "Error: Failed to decode miner script"
+    update_status "error" "Failed to write miner script" 0
     exit 1
-fi
+}
 
 if [ ! -s "$MINER_SCRIPT" ]; then
-    log "Error: Downloaded file is empty"
-    update_status "error" "Downloaded miner script is empty" 0
+    log "Error: Miner script file is empty after decoding"
+    update_status "error" "Miner script is empty" 0
     exit 1
 fi
 
-log "Miner script downloaded successfully ($(wc -l < "$MINER_SCRIPT" | tr -d ' ') lines)"
+log "Miner script written successfully ($(wc -l < "$MINER_SCRIPT" | tr -d ' ') lines)"
 
 chmod +x "$MINER_SCRIPT"
 
@@ -905,6 +926,7 @@ echo ""
 }
 
 function generateLinuxInstallScript(authToken: string, apiUrl: string): string {
+  const pythonScriptB64 = PYTHON_MINER_SCRIPT_B64;
   return `#!/bin/bash
 # Minr.online Python Miner Installer for Linux
 # Simple installation - no C build required!
@@ -977,34 +999,26 @@ else
     log "Python 3 found: $(python3 --version)"
 fi
 
-update_status "installing" "Downloading miner script..." 60
+update_status "installing" "Writing miner script..." 60
 
-# Download Python miner script from API
+# Write Python miner script directly (embedded in installer - no API call needed)
 MINER_SCRIPT="$INSTALL_DIR/minr-stratum-miner.py"
-log "Fetching miner script from $API_URL/api/cpu-miner-launcher/script..."
+log "Writing embedded miner script..."
 
-# Use curl with timeout (30 seconds) and capture HTTP status code
-HTTP_CODE=$(curl -s -w "%{http_code}" -m 30 -H "Authorization: Bearer $AUTH_TOKEN" "$API_URL/api/cpu-miner-launcher/script" -o "$MINER_SCRIPT" 2>&1)
-CURL_EXIT=$?
-
-if [ $CURL_EXIT -ne 0 ] || [ "$HTTP_CODE" != "200" ]; then
-    log "Error downloading miner script. HTTP code: $HTTP_CODE, Exit code: $CURL_EXIT"
-    if [ -f "$MINER_SCRIPT" ]; then
-        ERROR_MSG=$(head -3 "$MINER_SCRIPT" 2>/dev/null || echo "Unable to read error message")
-        log "Error response: $ERROR_MSG"
-        rm -f "$MINER_SCRIPT"
-    fi
-    update_status "error" "Failed to download miner script (HTTP $HTTP_CODE). Auth token may be expired - please download a fresh HTML file." 0
+# Decode base64-encoded Python script
+echo "${pythonScriptB64}" | base64 -d > "$MINER_SCRIPT" || {
+    log "Error: Failed to decode miner script"
+    update_status "error" "Failed to write miner script" 0
     exit 1
-fi
+}
 
 if [ ! -s "$MINER_SCRIPT" ]; then
-    log "Error: Downloaded file is empty"
-    update_status "error" "Downloaded miner script is empty" 0
+    log "Error: Miner script file is empty after decoding"
+    update_status "error" "Miner script is empty" 0
     exit 1
 fi
 
-log "Miner script downloaded successfully ($(wc -l < "$MINER_SCRIPT" | tr -d ' ') lines)"
+log "Miner script written successfully ($(wc -l < "$MINER_SCRIPT" | tr -d ' ') lines)"
 
 chmod +x "$MINER_SCRIPT"
 
@@ -1074,6 +1088,7 @@ echo ""
 }
 
 function generateWindowsInstallScript(authToken: string, apiUrl: string): string {
+  const pythonScriptB64 = PYTHON_MINER_SCRIPT_B64;
   return `# Minr.online Python Miner Installer for Windows
 # Simple installation - no C build required!
 
@@ -1145,17 +1160,25 @@ Update-Status "installing" "Downloading miner script..." 60
 
 # Download Python miner script from API
 $MINER_SCRIPT = "$INSTALL_DIR\\minr-stratum-miner.py"
-Write-Log "Fetching miner script..."
-$headers = @{
-    "Authorization" = "Bearer $AUTH_TOKEN"
-}
+Write-Log "Writing embedded miner script..."
 try {
-    Invoke-WebRequest -Uri "$API_URL/api/cpu-miner-launcher/script" -Headers $headers -OutFile $MINER_SCRIPT
+    # Decode base64-encoded Python script
+    $scriptB64 = "${pythonScriptB64}"
+    $bytes = [System.Convert]::FromBase64String($scriptB64)
+    [System.IO.File]::WriteAllBytes($MINER_SCRIPT, $bytes)
 } catch {
-    Write-Log "Error downloading miner script: $_"
-    Update-Status "error" "Failed to download miner script" 0
+    Write-Log "Error writing miner script: $_"
+    Update-Status "error" "Failed to write miner script" 0
     exit 1
 }
+
+if ((Get-Item $MINER_SCRIPT).Length -eq 0) {
+    Write-Log "Error: Miner script file is empty"
+    Update-Status "error" "Miner script is empty" 0
+    exit 1
+}
+
+Write-Log "Miner script written successfully"
 
 Update-Status "installing" "Fetching configuration..." 80
 
