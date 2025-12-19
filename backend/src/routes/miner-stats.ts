@@ -55,6 +55,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       // Use existing active session
       const existingSession = existingSessions[0];
       sessionId = existingSession.id;
+      console.log(`[miner-stats] Updating existing session ${sessionId} for worker ${finalWorkerName}`);
       
       // Calculate duration and average hashrate
       const duration = (Date.now() - new Date(existingSession.created_at).getTime()) / 1000;
@@ -78,6 +79,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       }
     } else {
       // No active session found - create new one
+      console.log(`[miner-stats] Creating new session for worker ${finalWorkerName} (no active session found)`);
       const { data: newSession, error: createError } = await supabase
         .from('mining_sessions')
         .insert({
