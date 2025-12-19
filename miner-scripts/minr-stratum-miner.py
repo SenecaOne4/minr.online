@@ -330,6 +330,11 @@ class StratumMiner:
                 clean_jobs = params[8]
                 
                 # Build job object
+                merkle_root = self.compute_merkle_root(
+                    bytes.fromhex(coinb1 + self.extranonce1 + coinb2),
+                    merkle_branches if isinstance(merkle_branches, list) else []
+                ).hex()
+                
                 self.current_job = {
                     "job_id": job_id,
                     "prevhash": prevhash,
@@ -339,11 +344,23 @@ class StratumMiner:
                     "version": version,
                     "nbits": nbits,
                     "ntime": ntime,
-                    "merkle_root": self.compute_merkle_root(
-                        bytes.fromhex(coinb1 + self.extranonce1 + coinb2),
-                        merkle_branches if isinstance(merkle_branches, list) else []
-                    ).hex()
+                    "merkle_root": merkle_root
                 }
+                
+                # Calculate target from difficulty (target = max_target / difficulty)
+                # Max target for Bitcoin: 0x00000000FFFF0000000000000000000000000000000000000000000000000000
+                max_target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
+                target = max_target // int(self.difficulty) if self.difficulty > 0 else max_target
+                
+                # Update shared_job for worker processes
+                self.shared_job.update({
+                    "job_id": job_id,
+                    "prevhash": prevhash,
+                    "version": version,
+                    "nbits": nbits,
+                    "merkle_root": merkle_root,
+                    "target": target
+                })
                 
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] New job: {job_id}")
         
