@@ -97,8 +97,8 @@ class StratumMiner:
         return hashlib.sha256(hashlib.sha256(data).digest()).digest()
     
     def reverse_bytes(self, data: bytes) -> bytes:
-        """Reverse byte order (little-endian to big-endian)"""
-        return bytes(reversed(data))
+        """Reverse byte order (little-endian to big-endian) - optimized"""
+        return data[::-1]  # Faster than bytes(reversed(data))
     
     def compute_merkle_root(self, coinbase: bytes, merkle_branches: list) -> bytes:
         """Compute Merkle root from coinbase and branches"""
@@ -126,7 +126,7 @@ class StratumMiner:
         return header
     
     def build_static_header(self, job: Dict[str, Any]) -> bytes:
-        """Build static parts of block header (version + prevhash + merkle_root + nbits)"""
+        """Build static parts of block header (version + prevhash + merkle_root + nbits) - optimized"""
         # Version comes as hex string from Stratum, convert to int
         version_str = job.get("version", "20000000")
         if isinstance(version_str, str):
@@ -135,13 +135,21 @@ class StratumMiner:
             version_int = version_str
         version = struct.pack("<I", version_int)
         
-        prevhash = bytes.fromhex(job["prevhash"])[::-1]  # Reverse for little-endian
-        merkle_root = bytes.fromhex(job["merkle_root"])[::-1]
-        nbits = bytes.fromhex(job["nbits"])[::-1]
+        # Pre-compute hex conversions (cache these)
+        prevhash_hex = job["prevhash"]
+        merkle_root_hex = job["merkle_root"]
+        nbits_hex = job["nbits"]
         
-        # Return static parts: version + prevhash + merkle_root + nbits
+        # Use bytearray for faster concatenation
+        header = bytearray(80)
+        header[0:4] = version
+        header[4:36] = bytes.fromhex(prevhash_hex)[::-1]  # Reverse for little-endian
+        header[36:68] = bytes.fromhex(merkle_root_hex)[::-1]
+        header[68:72] = bytes.fromhex(nbits_hex)[::-1]
+        
+        # Return static parts: version + prevhash + merkle_root + nbits (first 72 bytes)
         # Dynamic parts (extranonce2, ntime, nonce) will be appended in the loop
-        return version + prevhash + merkle_root + nbits
+        return bytes(header[:72])
     
     def check_share(self, header: bytes, target: int) -> bool:
         """Check if share meets target difficulty"""
@@ -233,41 +241,59 @@ class StratumMiner:
                 max_nonce = (worker_id + 1) * 0x1000000
             
             try:
-                # Optimize: Cache time and build header components once per batch
-                # Build ntime once per batch (time doesn't change much in microseconds)
-                current_time = int(time.time())
-                ntime_bytes = struct.pack("<I", current_time)
-                
-                # Pre-build static header parts (version, prevhash, merkle_root, nbits)
-                # These don't change within a job
+                # MAXIMUM PERFORMANCE: Pre-compute everything possible
+                # Cache static header parts (don't rebuild every iteration)
                 static_header = self.build_static_header(job)
                 
-                # Process a batch of nonces without sleep (faster)
-                batch_size = 1000
-                for _ in range(batch_size):
-                    # Build extranonce2 (4 bytes, little-endian)
-                    extranonce2 = struct.pack("<I", nonce & 0xFFFFFFFF)
+                # Cache methods locally to avoid attribute lookups in hot loop
+                submit_share = self.submit_share
+                pack_i = struct.pack
+                double_sha256 = self.double_sha256
+                reverse_bytes = self.reverse_bytes
+                
+                # Process large batches for maximum throughput
+                batch_size = 10000  # Larger batches = less overhead
+                current_time = int(time.time())
+                ntime_bytes = pack_i("<I", current_time)
+                
+                # Pre-allocate bytearray for header (faster than concatenation)
+                header_buf = bytearray(80)  # Bitcoin header is 80 bytes
+                header_buf[:len(static_header)] = static_header
+                static_len = len(static_header)
+                
+                for batch_iter in range(batch_size):
+                    # Build extranonce2 and nonce bytes (minimal operations)
+                    nonce_low = nonce & 0xFFFFFFFF
+                    extranonce2 = pack_i("<I", nonce_low)
+                    nonce_bytes = pack_i("<I", nonce)
                     
-                    # Build complete header (static + dynamic parts)
-                    header = static_header + extranonce2 + ntime_bytes + struct.pack("<I", nonce)
+                    # Build complete header using bytearray (faster than concatenation)
+                    header_buf[static_len:static_len+4] = extranonce2
+                    header_buf[static_len+4:static_len+8] = ntime_bytes
+                    header_buf[static_len+8:static_len+12] = nonce_bytes
+                    header = bytes(header_buf)
                     
-                    # Check if share meets target
-                    if self.check_share(header, target):
+                    # Check share (inline hash check for speed - no function call overhead)
+                    hash_result = reverse_bytes(double_sha256(header))
+                    hash_int = int.from_bytes(hash_result, byteorder="big")
+                    
+                    if hash_int < target:
                         # Found a share!
-                        self.submit_share(job_id, extranonce2, ntime_bytes, nonce)
+                        submit_share(job_id, extranonce2, ntime_bytes, nonce)
                     
+                    # Increment counters
                     self.total_hashes += 1
                     loop_count += 1
-                    
-                    # Increment nonce
                     nonce += 1
+                    
+                    # Wrap nonce if needed
                     if nonce >= max_nonce:
-                        nonce = worker_id * 0x1000000  # Wrap around
+                        nonce = worker_id * 0x1000000
                 
-                # Update time occasionally (every batch)
+                # Update time occasionally (every 10 batches = ~100k hashes)
                 if loop_count % (batch_size * 10) == 0:
                     current_time = int(time.time())
-                    ntime_bytes = struct.pack("<I", current_time)
+                    ntime_bytes = pack_i("<I", current_time)
                     
                 # #region agent log
                 if loop_count == 1 or loop_count % 100000 == 0:
