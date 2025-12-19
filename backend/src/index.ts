@@ -45,12 +45,6 @@ try {
   console.log('[server] Standalone miner routes not available');
 }
 
-let minerStatsRoutes: express.Router | null = null;
-try {
-  minerStatsRoutes = require('./routes/miner-stats').default;
-} catch (e) {
-  console.log('[server] Miner stats routes not available');
-}
 
 // Optional services
 let startPaymentVerifier: (() => void) | null = null;
@@ -124,8 +118,12 @@ import cpuMinerLauncherRoutes from './routes/cpu-miner-launcher';
 app.use('/api/cpu-miner-launcher', cpuMinerLauncherRoutes);
 
 // Miner stats route (requires auth)
-import minerStatsRoutes from './routes/miner-stats';
-app.use('/api/miner-stats', minerStatsRoutes);
+try {
+  const minerStatsRoutes = require('./routes/miner-stats').default;
+  app.use('/api/miner-stats', minerStatsRoutes);
+} catch (e) {
+  console.log('[server] Miner stats routes not available');
+}
 
 // Optional routes
 if (paymentRoutes) {
