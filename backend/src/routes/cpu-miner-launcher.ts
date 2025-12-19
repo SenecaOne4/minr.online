@@ -929,10 +929,11 @@ if [ -z "$STRATUM_HOST" ] || [ -z "$STRATUM_PORT" ] || [ -z "$WALLET" ]; then
     exit 1
 fi
 
-# Use Python to replace placeholders (more reliable than sed)
+# Use Python to replace placeholders (shell variables are expanded before Python sees them)
 python3 << PYTHON_REPLACE_EOF
 import sys
 import os
+import json
 
 script_path = os.path.expanduser("$MINER_SCRIPT")
 
@@ -948,27 +949,28 @@ except Exception as e:
 def escape_for_python(s):
     if s is None:
         return ""
-    return str(s).replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$').replace('\n', '\\n').replace('\r', '\\r')
+    # Escape special characters for Python string literals
+    return str(s).replace('\\\\', '\\\\\\\\').replace('"', '\\\\"').replace('$', '\\\\$').replace('\\n', '\\\\n').replace('\\r', '\\\\r')
 
-# Get values from environment (passed via shell variables)
-import os
-user_email = os.environ.get('USER_EMAIL', '$USER_EMAIL')
-btc_wallet = os.environ.get('WALLET', '$WALLET')
-stratum_host = os.environ.get('STRATUM_HOST', '$STRATUM_HOST')
-stratum_port = os.environ.get('STRATUM_PORT', '$STRATUM_PORT')
-worker_name = os.environ.get('WORKER', '$WORKER')
-api_url = os.environ.get('API_URL', '$API_URL')
-auth_token = os.environ.get('AUTH_TOKEN', '$AUTH_TOKEN')
+# Values are passed directly from shell (already expanded)
+# Use json.dumps to safely quote strings
+user_email = json.dumps(str("$USER_EMAIL")) if "$USER_EMAIL" else '""'
+btc_wallet = json.dumps(str("$WALLET")) if "$WALLET" else '""'
+stratum_host = json.dumps(str("$STRATUM_HOST")) if "$STRATUM_HOST" else '""'
+stratum_port = str("$STRATUM_PORT") if "$STRATUM_PORT" else "3333"
+worker_name = json.dumps(str("$WORKER")) if "$WORKER" else '""'
+api_url = json.dumps(str("$API_URL")) if "$API_URL" else '""'
+auth_token = json.dumps(str("$AUTH_TOKEN")) if "$AUTH_TOKEN" else '""'
 
 # Replace placeholders
 replacements = {
-    '{{USER_EMAIL}}': escape_for_python(user_email),
-    '{{BTC_WALLET}}': escape_for_python(btc_wallet),
-    '{{STRATUM_HOST}}': escape_for_python(stratum_host),
+    '{{USER_EMAIL}}': user_email,
+    '{{BTC_WALLET}}': btc_wallet,
+    '{{STRATUM_HOST}}': stratum_host,
     '{{STRATUM_PORT}}': stratum_port,  # Port is numeric, no quotes needed
-    '{{WORKER_NAME}}': escape_for_python(worker_name),
-    '{{API_URL}}': escape_for_python(api_url),
-    '{{AUTH_TOKEN}}': escape_for_python(auth_token),
+    '{{WORKER_NAME}}': worker_name,
+    '{{API_URL}}': api_url,
+    '{{AUTH_TOKEN}}': auth_token,
 }
 
 for placeholder, value in replacements.items():
@@ -976,8 +978,9 @@ for placeholder, value in replacements.items():
 
 # Verify replacements worked
 if '{{' in content:
-    remaining = [line for line in content.split('\\n') if '{{' in line][:5]
-    print(f"Warning: Some placeholders not replaced: {remaining}", file=sys.stderr)
+    remaining_lines = [line.strip() for line in content.split('\\n') if '{{' in line][:5]
+    print(f"Warning: Some placeholders not replaced: {remaining_lines}", file=sys.stderr)
+    sys.exit(1)
 
 # Write back
 try:
