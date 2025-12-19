@@ -27,6 +27,10 @@ WORKER_NAME = "{{WORKER_NAME}}"
 API_URL = "{{API_URL}}"
 AUTH_TOKEN = "{{AUTH_TOKEN}}"
 
+# Debug mode flag (set via --debug-stratum CLI arg)
+DEBUG_STRATUM = False
+TEST_LOW_DIFF = False
+
 
 # Standalone function for multiprocessing (must be outside class to avoid pickling issues)
 def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, shared_job, share_queue):
@@ -38,11 +42,6 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
     if not shared_running.value:
         return
     
-    # Mining loop
-    nonce = worker_id * 0x1000000  # Each process gets a range
-    max_nonce = (worker_id + 1) * 0x1000000
-    loop_count = 0
-    
     # Cache methods locally for speed
     pack_i = struct.pack
     sha256 = hashlib.sha256
@@ -53,14 +52,21 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
     nonce_start = worker_id * 0x1000000
     nonce_end = (worker_id + 1) * 0x1000000
     
-    # Local hash counter (update shared less frequently)
-    local_hash_count = 0
     # Main mining loop - restart when new jobs arrive
     job_id = ""
     target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
-    static_header = None
-    static_len = 0
-    ntime_bytes = pack_i("<I", int(time.time()))
+    coinb1 = ""
+    coinb2 = ""
+    extranonce1 = ""
+    merkle_branches = []
+    version_str = "20000000"
+    nbits = ""
+    prevhash = ""
+    extranonce2_size = 4
+    
+    # Local hash counter (64-bit unsigned)
+    local_hash_count = 0
+    loop_count = 0
             
     while shared_running.value:
         # Get current job from shared memory (may change during mining)
@@ -75,56 +81,73 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
             target = shared_job.get("target", 0x00000000FFFF0000000000000000000000000000000000000000000000000000)
             if isinstance(target, str):
                 target = int(target, 16)
-            # Rebuild static header for new job (inline for multiprocessing)
+            coinb1 = shared_job.get("coinb1", "")
+            coinb2 = shared_job.get("coinb2", "")
+            extranonce1 = shared_job.get("extranonce1", "")
+            merkle_branches = shared_job.get("merkle_branches", [])
             version_str = shared_job.get("version", "20000000")
-            if isinstance(version_str, str):
-                version_int = int(version_str, 16) if version_str.startswith(('0x', '0X')) or all(c in '0123456789abcdefABCDEF' for c in version_str) else int(version_str)
-            else:
-                version_int = version_str
-            version_bytes = pack_i("<I", version_int)
-            prevhash_bytes = bytes.fromhex(shared_job["prevhash"])[::-1]
-            merkle_root_bytes = bytes.fromhex(shared_job["merkle_root"])[::-1]
-            nbits_bytes = bytes.fromhex(shared_job["nbits"])[::-1]
-            static_header = version_bytes + prevhash_bytes + merkle_root_bytes + nbits_bytes
-            static_len = len(static_header)
+            nbits = shared_job.get("nbits", "")
+            prevhash = shared_job.get("prevhash", "")
+            extranonce2_size = shared_job.get("extranonce2_size", 4)
             # Reset nonce range for new job
             nonce = nonce_start
         
         try:
-            # Process HUGE batches for maximum throughput
-            batch_size = 100000  # Even larger batches for processes
+            # Process batches for maximum throughput
+            batch_size = 100000
             current_time = int(time.time())
             ntime_bytes = pack_i("<I", current_time)
             
             # Pre-allocate bytearray for header (reuse across iterations)
             header_buf = bytearray(80)  # Bitcoin header is 80 bytes
-            header_buf[:static_len] = static_header
+            
+            # Convert version to int
+            if isinstance(version_str, str):
+                version_int = int(version_str, 16) if version_str.startswith(('0x', '0X')) or all(c in '0123456789abcdefABCDEF' for c in version_str) else int(version_str)
+            else:
+                version_int = version_str
+            
+            # Build static header parts (version + prevhash + nbits)
+            version_bytes = pack_i("<I", version_int)
+            prevhash_bytes = bytes.fromhex(prevhash)[::-1]  # Reverse for little-endian
+            nbits_bytes = bytes.fromhex(nbits)[::-1]
+            
+            header_buf[0:4] = version_bytes
+            header_buf[4:36] = prevhash_bytes
+            header_buf[68:72] = nbits_bytes
             
             # Ultra-optimized inner loop (no GIL blocking!)
             for _ in range(batch_size):
-                # Build nonce bytes (minimal operations)
-                nonce_low = nonce & nonce_mask
-                extranonce2_bytes = pack_i("<I", nonce_low)
-                nonce_bytes = pack_i("<I", nonce)
+                # Build extranonce2 (little-endian, size from pool)
+                extranonce2_bytes = pack_i("<I", nonce & nonce_mask)[:extranonce2_size]
                 
-                # Build complete header using bytearray (in-place, no allocation)
-                header_buf[static_len:static_len+4] = extranonce2_bytes
-                header_buf[static_len+4:static_len+8] = ntime_bytes
-                header_buf[static_len+8:static_len+12] = nonce_bytes
+                # Build coinbase: coinb1 + extranonce1 + extranonce2 + coinb2
+                coinbase = bytes.fromhex(coinb1) + bytes.fromhex(extranonce1) + extranonce2_bytes + bytes.fromhex(coinb2)
                 
-                # Double SHA-256 (inline, no function call overhead)
+                # Compute merkle root from coinbase + merkle_branches
+                merkle_root = coinbase
+                for branch in merkle_branches:
+                    merkle_root = sha256(sha256(merkle_root + bytes.fromhex(branch)).digest()).digest()
+                
+                # Build complete header
+                merkle_root_bytes = merkle_root[::-1]  # Reverse for little-endian
+                header_buf[36:68] = merkle_root_bytes
+                header_buf[72:76] = ntime_bytes
+                header_buf[76:80] = pack_i("<I", nonce)
+                
+                # Double SHA-256
                 hash1 = sha256(bytes(header_buf)).digest()
                 hash2 = sha256(hash1).digest()
-                hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse inline
+                hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse for big-endian comparison
                 
                 if hash_int < target:
                     # Found a share! Submit via queue (main process will handle it)
                     try:
-                        share_queue.put((job_id, extranonce2_bytes, ntime_bytes, nonce), block=False)
+                        share_queue.put((job_id, extranonce2_bytes.hex(), ntime_bytes.hex(), nonce), block=False)
                     except:
                         pass  # Queue full, skip this share
                 
-                # Increment local counter
+                # Increment local counter (64-bit unsigned)
                 local_hash_count += 1
                 loop_count += 1
                 nonce += 1
@@ -133,9 +156,15 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 if nonce >= nonce_end:
                     nonce = nonce_start
             
-            # Update shared memory less frequently (every batch)
+            # Update shared memory less frequently (every batch) - use 64-bit unsigned
             with shared_total_hashes.get_lock():
-                shared_total_hashes.value += batch_size
+                # Ensure we don't overflow by checking current value
+                current = shared_total_hashes.value
+                if current + batch_size < 2**63:  # Stay within signed 64-bit range for multiprocessing
+                    shared_total_hashes.value += batch_size
+                else:
+                    # Wrap around safely (shouldn't happen in practice, but handle it)
+                    shared_total_hashes.value = (current + batch_size) % (2**63 - 1)
             
             # Update time occasionally (every 10 batches = ~1M hashes)
             if loop_count % (batch_size * 10) == 0:
@@ -155,21 +184,24 @@ class StratumMiner:
     def __init__(self):
         self.running = False
         self.socket: Optional[socket.socket] = None
-        self.total_hashes = 0
+        self.total_hashes = 0  # 64-bit unsigned (Python int is arbitrary precision)
         self.start_time: Optional[datetime] = None
         self.shares_accepted = 0
         self.shares_rejected = 0
+        self.shares_submitted = 0
         self.current_job: Optional[Dict[str, Any]] = None
-        self.difficulty = 1
+        self.difficulty = 1.0
         self.extranonce1 = ""
-        self.extranonce2_size = 0
+        self.extranonce2_size = 4
         self.submit_id = 3
         self.mining_threads = []
         self.mining_processes = []
         
         # Shared memory for multiprocessing (bypasses GIL)
+        # Use 'q' (signed long long) for 64-bit, but treat as unsigned
+        # Python multiprocessing doesn't support unsigned types directly
         self.manager = multiprocessing.Manager()
-        self.shared_total_hashes = multiprocessing.Value('i', 0)  # Integer shared value
+        self.shared_total_hashes = multiprocessing.Value('q', 0)  # 64-bit signed (treat as unsigned)
         self.shared_running = multiprocessing.Value('b', True)  # Boolean shared value
         self.shared_job = self.manager.dict()  # Shared dict for job data
         self.share_queue = self.manager.Queue()  # Queue for share submission
@@ -180,7 +212,10 @@ class StratumMiner:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(30)
             self.socket.connect((STRATUM_HOST, STRATUM_PORT))
-            print(f"✓ Connected to {STRATUM_HOST}:{STRATUM_PORT}")
+            if DEBUG_STRATUM:
+                print(f"[DEBUG] ✓ Connected to {STRATUM_HOST}:{STRATUM_PORT}")
+            else:
+                print(f"✓ Connected to {STRATUM_HOST}:{STRATUM_PORT}")
             return True
         except Exception as e:
             print(f"✗ Connection error: {e}")
@@ -191,6 +226,8 @@ class StratumMiner:
         if self.socket:
             try:
                 data = json.dumps(msg) + "\n"
+                if DEBUG_STRATUM:
+                    print(f"[DEBUG] → SEND: {data.strip()}")
                 self.socket.send(data.encode())
             except Exception as e:
                 print(f"Error sending message: {e}")
@@ -212,7 +249,10 @@ class StratumMiner:
             # Parse JSON from buffer
             line = buffer.split(b"\n", 1)[0].decode().strip()
             if line:
-                return json.loads(line)
+                msg = json.loads(line)
+                if DEBUG_STRATUM:
+                    print(f"[DEBUG] ← RECV: {line}")
+                return msg
         except json.JSONDecodeError:
             pass
         except socket.timeout:
@@ -286,15 +326,17 @@ class StratumMiner:
         hash_int = int.from_bytes(hash_result, byteorder="big")
         return hash_int < target
     
-    def submit_share(self, job_id: str, extranonce2: bytes, ntime: bytes, nonce: int):
+    def submit_share(self, job_id: str, extranonce2_hex: str, ntime_hex: str, nonce: int):
         """Submit a share to the pool"""
         submit_id = self.submit_id
         self.submit_id += 1
+        self.shares_submitted += 1
         
-        # Convert to hex strings (big-endian)
-        extranonce2_hex = extranonce2.hex()
-        ntime_hex = ntime.hex()
+        # Convert nonce to hex (little-endian, 8 hex chars)
         nonce_hex = struct.pack("<I", nonce).hex()
+        
+        if DEBUG_STRATUM:
+            print(f"[DEBUG] Submitting share: job_id={job_id}, extranonce2={extranonce2_hex}, ntime={ntime_hex}, nonce={nonce_hex}")
         
         self.send_message({
             "id": submit_id,
@@ -329,12 +371,10 @@ class StratumMiner:
                 ntime = params[7]
                 clean_jobs = params[8]
                 
-                # Build job object
-                merkle_root = self.compute_merkle_root(
-                    bytes.fromhex(coinb1 + self.extranonce1 + coinb2),
-                    merkle_branches if isinstance(merkle_branches, list) else []
-                ).hex()
+                if DEBUG_STRATUM:
+                    print(f"[DEBUG] mining.notify: job_id={job_id}, clean_jobs={clean_jobs}")
                 
+                # Build job object (merkle_root will be computed per share with extranonce2)
                 self.current_job = {
                     "job_id": job_id,
                     "prevhash": prevhash,
@@ -344,7 +384,6 @@ class StratumMiner:
                     "version": version,
                     "nbits": nbits,
                     "ntime": ntime,
-                    "merkle_root": merkle_root
                 }
                 
                 # Calculate target from difficulty (target = max_target / difficulty)
@@ -356,10 +395,14 @@ class StratumMiner:
                 self.shared_job.update({
                     "job_id": job_id,
                     "prevhash": prevhash,
+                    "coinb1": coinb1,
+                    "coinb2": coinb2,
+                    "extranonce1": self.extranonce1,
+                    "merkle_branches": merkle_branches if isinstance(merkle_branches, list) else [],
                     "version": version,
                     "nbits": nbits,
-                    "merkle_root": merkle_root,
-                    "target": target
+                    "target": target,
+                    "extranonce2_size": self.extranonce2_size
                 })
                 
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] New job: {job_id}")
@@ -367,8 +410,16 @@ class StratumMiner:
         elif method == "mining.set_difficulty":
             # Difficulty change
             if params:
-                self.difficulty = params[0]
+                self.difficulty = float(params[0])
+                if DEBUG_STRATUM:
+                    print(f"[DEBUG] mining.set_difficulty: {self.difficulty}")
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Difficulty: {self.difficulty}")
+                
+                # Recalculate target and update shared_job
+                if self.current_job:
+                    max_target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
+                    target = max_target // int(self.difficulty) if self.difficulty > 0 else max_target
+                    self.shared_job["target"] = target
         
         elif result is not None:
             # Handle responses
@@ -376,6 +427,8 @@ class StratumMiner:
                 if isinstance(result, list) and len(result) >= 2:
                     self.extranonce1 = result[1] if isinstance(result[1], str) else ""
                     self.extranonce2_size = result[2] if len(result) >= 3 else 4
+                    if DEBUG_STRATUM:
+                        print(f"[DEBUG] mining.subscribe response: extranonce1={self.extranonce1}, extranonce2_size={self.extranonce2_size}")
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Subscribed (extranonce1: {self.extranonce1[:16]}...)")
             
             elif msg_id == 2:  # Authorization response
@@ -388,10 +441,14 @@ class StratumMiner:
             elif msg_id and msg_id >= 3:  # Submit response
                 if result:
                     self.shares_accepted += 1
+                    if DEBUG_STRATUM:
+                        print(f"[DEBUG] Share ACCEPTED (ID: {msg_id})")
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Share accepted (Total: {self.shares_accepted})")
                 else:
                     self.shares_rejected += 1
                     error_msg = error[1] if error and len(error) > 1 else "Unknown error"
+                    if DEBUG_STRATUM:
+                        print(f"[DEBUG] Share REJECTED (ID: {msg_id}): {error_msg}")
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] ✗ Share rejected: {error_msg} (Total rejected: {self.shares_rejected})")
         
         elif error:
@@ -429,6 +486,10 @@ class StratumMiner:
         print(f"Wallet: {BTC_WALLET}")
         print(f"Pool: {STRATUM_HOST}:{STRATUM_PORT}")
         print(f"Threads: {num_threads}")
+        if DEBUG_STRATUM:
+            print("Debug mode: ON")
+        if TEST_LOW_DIFF:
+            print("Test mode: Low difficulty")
         print("=" * 60)
         
         # Start message receiver thread
@@ -468,8 +529,8 @@ class StratumMiner:
                 try:
                     share_data = self.share_queue.get(timeout=0.1)
                     if share_data:
-                        job_id, extranonce2, ntime, nonce = share_data
-                        self.submit_share(job_id, extranonce2, ntime, nonce)
+                        job_id, extranonce2_hex, ntime_hex, nonce = share_data
+                        self.submit_share(job_id, extranonce2_hex, ntime_hex, nonce)
                 except:
                     pass
         
@@ -481,19 +542,32 @@ class StratumMiner:
             import urllib.request
             import urllib.error
             
+            last_total_hashes = 0  # Track for hashrate calculation (64-bit unsigned)
+            
             while self.running:
                 time.sleep(10)
                 if self.start_time:
-                    # Get total hashes from shared memory
+                    # Get total hashes from shared memory (64-bit unsigned)
                     with self.shared_total_hashes.get_lock():
                         total_hashes = self.shared_total_hashes.value
+                        # Handle signed 64-bit as unsigned
+                        if total_hashes < 0:
+                            total_hashes = total_hashes + 2**64
+                    
                     self.total_hashes = total_hashes  # Update instance for compatibility
                     
                     duration = (datetime.now() - self.start_time).total_seconds()
-                    hashrate = total_hashes / duration if duration > 0 else 0
+                    
+                    # Calculate hashrate using unsigned delta
+                    delta = total_hashes - last_total_hashes
+                    if delta < 0:
+                        delta = delta + 2**64  # Handle wrap-around
+                    hashrate = delta / 10.0 if duration > 0 else 0  # Delta over last 10 seconds
+                    last_total_hashes = total_hashes
+                    
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Hashrate: {hashrate:.2f} H/s | "
                           f"Accepted: {self.shares_accepted} | Rejected: {self.shares_rejected} | "
-                          f"Total hashes: {self.total_hashes:,}")
+                          f"Submitted: {self.shares_submitted} | Total hashes: {self.total_hashes:,}")
                     
                     # Report stats to API (try even without AUTH_TOKEN - endpoint will find user by workerName)
                     if API_URL:
@@ -560,6 +634,7 @@ class StratumMiner:
             print(f"Duration: {duration:.0f} seconds")
             print(f"Total Hashes: {self.total_hashes:,}")
             print(f"Hashrate: {self.total_hashes / duration:.2f} H/s" if duration > 0 else "Hashrate: 0 H/s")
+            print(f"Shares Submitted: {self.shares_submitted}")
             print(f"Shares Accepted: {self.shares_accepted}")
             print(f"Shares Rejected: {self.shares_rejected}")
             print("=" * 60)
@@ -569,18 +644,25 @@ def main():
     """Main entry point"""
     import multiprocessing
     
-    # Get number of threads from command line or use CPU count
-    num_threads = 1
+    global DEBUG_STRATUM, TEST_LOW_DIFF
+    
+    # Parse command line arguments
+    num_threads = multiprocessing.cpu_count()
     if len(sys.argv) > 1:
-        try:
-            num_threads = int(sys.argv[1])
-        except ValueError:
-            if sys.argv[1] == "--cli":
+        for arg in sys.argv[1:]:
+            if arg == "--debug-stratum":
+                DEBUG_STRATUM = True
+            elif arg == "--test-low-diff":
+                TEST_LOW_DIFF = True
+            elif arg == "--cli":
                 num_threads = multiprocessing.cpu_count()
             else:
-                print(f"Usage: {sys.argv[0]} [num_threads]")
-                print(f"       {sys.argv[0]} --cli  # Use all CPU cores")
-                sys.exit(1)
+                try:
+                    num_threads = int(arg)
+                except ValueError:
+                    print(f"Usage: {sys.argv[0]} [num_threads] [--debug-stratum] [--test-low-diff]")
+                    print(f"       {sys.argv[0]} --cli  # Use all CPU cores")
+                    sys.exit(1)
     else:
         num_threads = multiprocessing.cpu_count()
     
@@ -600,4 +682,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
