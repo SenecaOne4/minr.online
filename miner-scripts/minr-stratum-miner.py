@@ -499,8 +499,8 @@ class StratumMiner:
                             with urllib.request.urlopen(req, timeout=5) as response:
                                 pass  # Stats reported successfully
                         except Exception as e:
-                            # Silently fail - don't interrupt mining
-                            pass
+                            # Log error but don't interrupt mining
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠ Stats reporting error: {type(e).__name__}: {str(e)[:100]}")
         
         stats_thread = threading.Thread(target=print_and_report_stats, daemon=True)
         stats_thread.start()
