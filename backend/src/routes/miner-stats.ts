@@ -18,20 +18,26 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       return res.status(400).json({ error: 'Invalid totalHashes' });
     }
 
-    // Find or create mining session for this user
-    const { data: existingSession, error: findError } = await supabase
+    const finalWorkerName = workerName || `minr.${req.user?.email?.split('@')[0] || 'user'}`;
+    
+    // Find the most recent active session for this user/worker (updated within last 5 minutes)
+    // This prevents creating duplicate sessions if stats are reported frequently
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    
+    const { data: existingSessions, error: findError } = await supabase
       .from('mining_sessions')
-      .select('id, created_at')
+      .select('id, created_at, updated_at')
       .eq('user_id', userId)
-      .eq('worker_name', workerName || `minr.${req.user?.email?.split('@')[0] || 'user'}`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .eq('worker_name', finalWorkerName)
+      .gte('updated_at', fiveMinutesAgo)  // Only consider recently updated sessions
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
     let sessionId: string;
 
-    if (existingSession && !findError) {
-      // Use existing session
+    if (existingSessions && existingSessions.length > 0) {
+      // Use existing active session
+      const existingSession = existingSessions[0];
       sessionId = existingSession.id;
       
       // Calculate duration and average hashrate
@@ -55,12 +61,12 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         return res.status(500).json({ error: 'Failed to update session' });
       }
     } else {
-      // Create new session
+      // No active session found - create new one
       const { data: newSession, error: createError } = await supabase
         .from('mining_sessions')
         .insert({
           user_id: userId,
-          worker_name: workerName || `minr.${req.user?.email?.split('@')[0] || 'user'}`,
+          worker_name: finalWorkerName,
           total_hashes: totalHashes,
           avg_hashrate: hashesPerSecond || 0,
           accepted_shares: acceptedShares || 0,
