@@ -495,8 +495,8 @@ class StratumMiner:
                           f"Accepted: {self.shares_accepted} | Rejected: {self.shares_rejected} | "
                           f"Total hashes: {self.total_hashes:,}")
                     
-                    # Report stats to API
-                    if API_URL and AUTH_TOKEN:
+                    # Report stats to API (try even without AUTH_TOKEN - endpoint will find user by workerName)
+                    if API_URL:
                         try:
                             stats_data = {
                                 "totalHashes": self.total_hashes,
@@ -506,13 +506,17 @@ class StratumMiner:
                                 "workerName": WORKER_NAME
                             }
                             
+                            headers = {
+                                'Content-Type': 'application/json'
+                            }
+                            # Add auth token if available
+                            if AUTH_TOKEN:
+                                headers['Authorization'] = f'Bearer {AUTH_TOKEN}'
+                            
                             req = urllib.request.Request(
                                 f"{API_URL}/api/miner-stats",
                                 data=json.dumps(stats_data).encode('utf-8'),
-                                headers={
-                                    'Content-Type': 'application/json',
-                                    'Authorization': f'Bearer {AUTH_TOKEN}'
-                                },
+                                headers=headers,
                                 method='POST'
                             )
                             
