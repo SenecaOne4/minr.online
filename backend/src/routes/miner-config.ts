@@ -15,9 +15,10 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     const userId = req.user!.id;
 
     // Fetch user profile (auto-create if doesn't exist, like cpu-miner-launcher does)
+    // Note: email comes from auth.users, not profiles table
     let { data: profile, error: profileError } = await supabase!
       .from('profiles')
-      .select('btc_payout_address, email, has_paid_entry_fee, exempt_from_entry_fee, is_admin')
+      .select('btc_payout_address, has_paid_entry_fee, exempt_from_entry_fee, is_admin')
       .eq('id', userId)
       .single();
 
@@ -75,8 +76,9 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       ? parseInt(stratumEndpoint.split(':').pop() || '3333')
       : 3333;
 
-    // Generate worker name
-    const workerName = `minr.${profile.email?.split('@')[0] || 'user'}`;
+    // Generate worker name (use email from auth token, not profile)
+    const userEmail = req.user?.email || '';
+    const workerName = `minr.${userEmail.split('@')[0] || 'user'}`;
 
     // Return configuration
     res.json({
@@ -99,8 +101,8 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       },
       // Version info
       version: '1.0.0',
-      user: profile.email,
-      user_email: profile.email, // Alias for compatibility
+      user: userEmail,
+      user_email: userEmail, // Alias for compatibility
     });
   } catch (error: any) {
     console.error('[miner-config] Error fetching config:', error);
