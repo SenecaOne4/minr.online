@@ -673,11 +673,14 @@ class StratumMiner:
             import urllib.error
             
             last_total_hashes = 0  # Track for hashrate calculation (64-bit unsigned)
+            last_check_time = None  # Track last check time for accurate hashrate
             log_path = "/Users/seneca/Desktop/minr.online/.cursor/debug.log"
             
             while self.running:
                 time.sleep(10)
                 if self.start_time:
+                    current_check_time = datetime.now()
+                    
                     # Get total hashes from shared memory (64-bit unsigned)
                     with self.shared_total_hashes.get_lock():
                         total_hashes = self.shared_total_hashes.value
@@ -687,13 +690,26 @@ class StratumMiner:
                     
                     self.total_hashes = total_hashes  # Update instance for compatibility
                     
-                    duration = (datetime.now() - self.start_time).total_seconds()
+                    duration = (current_check_time - self.start_time).total_seconds()
                     
                     # Calculate hashrate using unsigned delta
                     delta = total_hashes - last_total_hashes
                     if delta < 0:
                         delta = delta + 2**64  # Handle wrap-around
-                    hashrate = delta / 10.0 if duration > 0 else 0  # Delta over last 10 seconds
+                    
+                    # Calculate hashrate: delta over the actual time elapsed since last check
+                    # This prevents showing 0.00 H/s when workers are actively mining
+                    if last_check_time is not None:
+                        actual_elapsed = (current_check_time - last_check_time).total_seconds()
+                        if actual_elapsed > 0:
+                            hashrate = delta / actual_elapsed
+                        else:
+                            hashrate = 0.0
+                    else:
+                        # First check: use duration since start (but at least 1 second to avoid division by zero)
+                        hashrate = delta / max(duration, 1.0) if duration > 0 else 0.0
+                    
+                    last_check_time = current_check_time
                     
                     # #region agent log
                     try:
