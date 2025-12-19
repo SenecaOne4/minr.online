@@ -118,8 +118,13 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
             
             # Ultra-optimized inner loop (no GIL blocking!)
             for _ in range(batch_size):
-                # Build extranonce2 (little-endian, size from pool)
-                extranonce2_bytes = pack_i("<I", nonce & nonce_mask)[:extranonce2_size]
+                # Build extranonce2 (little-endian, size from pool - can be 4 or 8 bytes)
+                if extranonce2_size == 8:
+                    # Use 64-bit packing for 8-byte extranonce2
+                    extranonce2_bytes = struct.pack("<Q", nonce & 0xFFFFFFFFFFFFFFFF)
+                else:
+                    # Use 32-bit packing for 4-byte extranonce2 (default)
+                    extranonce2_bytes = pack_i("<I", nonce & nonce_mask)
                 
                 # Build coinbase: coinb1 + extranonce1 + extranonce2 + coinb2
                 coinbase = bytes.fromhex(coinb1) + bytes.fromhex(extranonce1) + extranonce2_bytes + bytes.fromhex(coinb2)
@@ -148,8 +153,12 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 if hash_int < target:
                     # Found a share! Submit via queue (main process will handle it)
                     try:
-                        share_queue.put((job_id, extranonce2_bytes.hex(), ntime_bytes.hex(), nonce), block=False)
-                    except:
+                        # Convert extranonce2 to hex (must match extranonce2_size)
+                        extranonce2_hex = extranonce2_bytes.hex()
+                        share_queue.put((job_id, extranonce2_hex, ntime_bytes.hex(), nonce), block=False)
+                    except Exception as e:
+                        if DEBUG_STRATUM:
+                            print(f"[DEBUG] Failed to queue share: {e}")
                         pass  # Queue full, skip this share
                 
                 # Increment local counter (64-bit unsigned)
@@ -195,9 +204,9 @@ class StratumMiner:
         self.shares_rejected = 0
         self.shares_submitted = 0
         self.current_job: Optional[Dict[str, Any]] = None
-        self.difficulty = 1.0
+        self.difficulty = 1.0  # Default difficulty (will be updated by mining.set_difficulty)
         self.extranonce1 = ""
-        self.extranonce2_size = 4
+        self.extranonce2_size = 4  # Default, will be updated by subscribe response
         self.submit_id = 3
         self.mining_threads = []
         self.mining_processes = []
@@ -394,7 +403,12 @@ class StratumMiner:
                 # Calculate target from difficulty (target = max_target / difficulty)
                 # Max target for Bitcoin: 0x00000000FFFF0000000000000000000000000000000000000000000000000000
                 max_target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
-                target = max_target // int(self.difficulty) if self.difficulty > 0 else max_target
+                # Use difficulty, default to 1.0 if not set yet
+                current_diff = float(self.difficulty) if self.difficulty > 0 else 1.0
+                target = int(max_target // current_diff)
+                
+                if DEBUG_STRATUM:
+                    print(f"[DEBUG] Job {job_id}: difficulty={current_diff}, target={hex(target)[:20]}...")
                 
                 # Update shared_job for worker processes
                 self.shared_job.update({
@@ -421,10 +435,11 @@ class StratumMiner:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Difficulty: {self.difficulty}")
                 
                 # Recalculate target and update shared_job
-                if self.current_job:
-                    max_target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
-                    target = max_target // int(self.difficulty) if self.difficulty > 0 else max_target
-                    self.shared_job["target"] = target
+                max_target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
+                target = int(max_target // self.difficulty) if self.difficulty > 0 else max_target
+                self.shared_job["target"] = target
+                if DEBUG_STRATUM:
+                    print(f"[DEBUG] Updated target: {hex(target)[:20]}...")
         
         elif result is not None:
             # Handle responses
