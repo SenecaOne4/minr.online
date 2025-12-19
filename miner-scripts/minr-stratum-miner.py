@@ -124,10 +124,15 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 # Build coinbase: coinb1 + extranonce1 + extranonce2 + coinb2
                 coinbase = bytes.fromhex(coinb1) + bytes.fromhex(extranonce1) + extranonce2_bytes + bytes.fromhex(coinb2)
                 
-                # Compute merkle root from coinbase + merkle_branches
-                merkle_root = coinbase
+                # Compute coinbase hash (double SHA256)
+                coinbase_hash = sha256(sha256(coinbase).digest()).digest()
+                
+                # Compute merkle root from coinbase_hash + merkle_branches
+                # Each branch is combined with current hash: dSHA256(left || right)
+                merkle_root = coinbase_hash
                 for branch in merkle_branches:
-                    merkle_root = sha256(sha256(merkle_root + bytes.fromhex(branch)).digest()).digest()
+                    branch_bytes = bytes.fromhex(branch)
+                    merkle_root = sha256(sha256(merkle_root + branch_bytes).digest()).digest()
                 
                 # Build complete header
                 merkle_root_bytes = merkle_root[::-1]  # Reverse for little-endian
