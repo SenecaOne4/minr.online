@@ -20,41 +20,38 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
 
     const finalWorkerName = workerName || `minr.${req.user?.email?.split('@')[0] || 'user'}`;
     
-    // Find the most recent active session for this user/worker (updated within last 10 minutes)
-    // This prevents creating duplicate sessions if stats are reported frequently
+    // Find the most recent session for this user/worker
+    // Check both updated_at and created_at to handle cases where updated_at might be null
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     
-    // First try to find recently updated sessions
-    let { data: existingSessions, error: findError } = await supabase
+    // Try to find any session for this worker (most recent first)
+    // Use COALESCE to handle null updated_at by falling back to created_at
+    const { data: existingSessions, error: findError } = await supabase
       .from('mining_sessions')
       .select('id, created_at, updated_at')
       .eq('user_id', userId)
       .eq('worker_name', finalWorkerName)
-      .gte('updated_at', tenMinutesAgo)  // Only consider recently updated sessions
-      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1);
     
-    // If no recently updated session, check for any session with this worker name (fallback)
-    if (!existingSessions || existingSessions.length === 0) {
-      const { data: anySession } = await supabase
-        .from('mining_sessions')
-        .select('id, created_at, updated_at')
-        .eq('user_id', userId)
-        .eq('worker_name', finalWorkerName)
-        .order('updated_at', { ascending: false })
-        .limit(1);
+    // Check if the most recent session is still "active" (created or updated within last 10 minutes)
+    let activeSession = null;
+    if (existingSessions && existingSessions.length > 0) {
+      const session = existingSessions[0];
+      const lastActivity = session.updated_at || session.created_at;
+      const lastActivityTime = new Date(lastActivity).getTime();
+      const tenMinutesAgoTime = Date.now() - 10 * 60 * 1000;
       
-      if (anySession && anySession.length > 0) {
-        existingSessions = anySession;
+      if (lastActivityTime >= tenMinutesAgoTime) {
+        activeSession = session;
       }
     }
 
     let sessionId: string;
 
-    if (existingSessions && existingSessions.length > 0) {
+    if (activeSession) {
       // Use existing active session
-      const existingSession = existingSessions[0];
-      sessionId = existingSession.id;
+      sessionId = activeSession.id;
       console.log(`[miner-stats] Updating existing session ${sessionId} for worker ${finalWorkerName}`);
       
       // Calculate duration and average hashrate
