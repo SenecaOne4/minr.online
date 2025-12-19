@@ -166,7 +166,9 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 # Double SHA-256
                 hash1 = sha256(bytes(header_buf)).digest()
                 hash2 = sha256(hash1).digest()
-                hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse for big-endian comparison
+                # Convert hash to integer for comparison (Bitcoin uses big-endian)
+                # hash2 is already in correct byte order from SHA256, interpret as big-endian directly
+                hash_int = from_bytes(hash2, byteorder="big")
                 
                 # Debug: log first few hash comparisons to verify target (works in multiprocessing)
                 if debug_mode and loop_count < 10:
