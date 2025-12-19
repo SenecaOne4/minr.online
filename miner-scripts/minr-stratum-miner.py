@@ -168,10 +168,9 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 hash1 = sha256(bytes(header_buf)).digest()
                 hash2 = sha256(hash1).digest()
                 # Convert hash to integer for comparison with target
-                # CRITICAL: Bitcoin compares hashes as LITTLE-ENDIAN integers!
-                # Use byteorder="little" to interpret the hash bytes correctly
-                # Block hashes are displayed in big-endian hex but compared as little-endian integers
-                hash_int = from_bytes(hash2, byteorder="little")
+                # Bitcoin compares hashes as BIG-ENDIAN integers
+                # The target is also a big-endian integer: 0x00000000FFFF0000...
+                hash_int = from_bytes(hash2, byteorder="big")
                 
                 # Debug: log first few hash comparisons to verify target (works in multiprocessing)
                 if debug_mode and loop_count < 10:
@@ -182,8 +181,8 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                     hash_bytes_repr = hash2.hex()[:32]  # First 16 bytes as hex
                     debug_msg = f"[DEBUG Worker {worker_id}] Hash check #{loop_count}:\n"
                     debug_msg += f"  Raw hash bytes (hex): {hash2.hex()}\n"
-                    debug_msg += f"  Hash as int (big-endian): {hash_int}\n"
-                    debug_msg += f"  Target as int: {target}\n"
+                    debug_msg += f"  Hash as int (little-endian): {hash_int}\n"
+                    debug_msg += f"  Target as int (little-endian): {target}\n"
                     debug_msg += f"  Hash < target: {hash_int < target}\n"
                     # Also check if hash is close to target (within 10% to see if we're in the right ballpark)
                     if target > 0:
