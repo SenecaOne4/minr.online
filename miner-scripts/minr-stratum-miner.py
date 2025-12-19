@@ -194,124 +194,123 @@ class StratumMiner:
 
 # Standalone function for multiprocessing (must be outside class to avoid pickling issues)
 def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, shared_job, share_queue):
-        """Mining worker process (multiprocessing - bypasses GIL for true parallelism)"""
-        # Wait for first job
-        while shared_running.value and not shared_job:
-            time.sleep(0.1)
+    """Mining worker process (multiprocessing - bypasses GIL for true parallelism)"""
+    # Wait for first job
+    while shared_running.value and not shared_job:
+        time.sleep(0.1)
+    
+    if not shared_running.value:
+        return
+    
+    # Mining loop
+    nonce = worker_id * 0x1000000  # Each process gets a range
+    max_nonce = (worker_id + 1) * 0x1000000
+    loop_count = 0
+    
+    # Cache methods locally for speed
+    pack_i = struct.pack
+    sha256 = hashlib.sha256
+    from_bytes = int.from_bytes
+    
+    # Pre-compute constants
+    nonce_mask = 0xFFFFFFFF
+    nonce_start = worker_id * 0x1000000
+    nonce_end = (worker_id + 1) * 0x1000000
+    
+    # Local hash counter (update shared less frequently)
+    local_hash_count = 0
+    # Main mining loop - restart when new jobs arrive
+    job_id = ""
+    target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
+    static_header = None
+    static_len = 0
+    ntime_bytes = pack_i("<I", int(time.time()))
+            
+    while shared_running.value:
+        # Get current job from shared memory (may change during mining)
+        if not shared_job:
+            time.sleep(0.01)  # Brief wait for job
+            continue
         
-        if not shared_running.value:
-            return
+        # Update job info if it changed
+        current_job_id = shared_job.get("job_id", "")
+        if current_job_id != job_id:
+            job_id = current_job_id
+            target = shared_job.get("target", 0x00000000FFFF0000000000000000000000000000000000000000000000000000)
+            if isinstance(target, str):
+                target = int(target, 16)
+            # Rebuild static header for new job (inline for multiprocessing)
+            version_str = shared_job.get("version", "20000000")
+            if isinstance(version_str, str):
+                version_int = int(version_str, 16) if version_str.startswith(('0x', '0X')) or all(c in '0123456789abcdefABCDEF' for c in version_str) else int(version_str)
+            else:
+                version_int = version_str
+            version_bytes = pack_i("<I", version_int)
+            prevhash_bytes = bytes.fromhex(shared_job["prevhash"])[::-1]
+            merkle_root_bytes = bytes.fromhex(shared_job["merkle_root"])[::-1]
+            nbits_bytes = bytes.fromhex(shared_job["nbits"])[::-1]
+            static_header = version_bytes + prevhash_bytes + merkle_root_bytes + nbits_bytes
+            static_len = len(static_header)
+            # Reset nonce range for new job
+            nonce = nonce_start
         
-        # Mining loop
-        nonce = worker_id * 0x1000000  # Each process gets a range
-        max_nonce = (worker_id + 1) * 0x1000000
-        loop_count = 0
-        
-        # Cache methods locally for speed
-        pack_i = struct.pack
-        sha256 = hashlib.sha256
-        from_bytes = int.from_bytes
-        
-        # Pre-compute constants
-        nonce_mask = 0xFFFFFFFF
-        nonce_start = worker_id * 0x1000000
-        nonce_end = (worker_id + 1) * 0x1000000
-        
-        # Local hash counter (update shared less frequently)
-        local_hash_count = 0
-        # Main mining loop - restart when new jobs arrive
-        job_id = ""
-        target = 0x00000000FFFF0000000000000000000000000000000000000000000000000000
-        static_header = None
-        static_len = 0
-        ntime_bytes = pack_i("<I", int(time.time()))
+        try:
+            # Process HUGE batches for maximum throughput
+            batch_size = 100000  # Even larger batches for processes
+            current_time = int(time.time())
+            ntime_bytes = pack_i("<I", current_time)
+            
+            # Pre-allocate bytearray for header (reuse across iterations)
+            header_buf = bytearray(80)  # Bitcoin header is 80 bytes
+            header_buf[:static_len] = static_header
+            
+            # Ultra-optimized inner loop (no GIL blocking!)
+            for _ in range(batch_size):
+                # Build nonce bytes (minimal operations)
+                nonce_low = nonce & nonce_mask
+                extranonce2_bytes = pack_i("<I", nonce_low)
+                nonce_bytes = pack_i("<I", nonce)
                 
-        while shared_running.value:
-            # Get current job from shared memory (may change during mining)
-            if not shared_job:
-                time.sleep(0.01)  # Brief wait for job
-                continue
+                # Build complete header using bytearray (in-place, no allocation)
+                header_buf[static_len:static_len+4] = extranonce2_bytes
+                header_buf[static_len+4:static_len+8] = ntime_bytes
+                header_buf[static_len+8:static_len+12] = nonce_bytes
+                
+                # Double SHA-256 (inline, no function call overhead)
+                hash1 = sha256(bytes(header_buf)).digest()
+                hash2 = sha256(hash1).digest()
+                hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse inline
+                
+                if hash_int < target:
+                    # Found a share! Submit via queue (main process will handle it)
+                    try:
+                        share_queue.put((job_id, extranonce2_bytes, ntime_bytes, nonce), block=False)
+                    except:
+                        pass  # Queue full, skip this share
+                
+                # Increment local counter
+                local_hash_count += 1
+                loop_count += 1
+                nonce += 1
+                
+                # Wrap nonce if needed
+                if nonce >= nonce_end:
+                    nonce = nonce_start
             
-            # Update job info if it changed
-            current_job_id = shared_job.get("job_id", "")
-            if current_job_id != job_id:
-                job_id = current_job_id
-                target = shared_job.get("target", 0x00000000FFFF0000000000000000000000000000000000000000000000000000)
-                if isinstance(target, str):
-                    target = int(target, 16)
-                # Rebuild static header for new job (inline for multiprocessing)
-                version_str = shared_job.get("version", "20000000")
-                if isinstance(version_str, str):
-                    version_int = int(version_str, 16) if version_str.startswith(('0x', '0X')) or all(c in '0123456789abcdefABCDEF' for c in version_str) else int(version_str)
-                else:
-                    version_int = version_str
-                version_bytes = pack_i("<I", version_int)
-                prevhash_bytes = bytes.fromhex(shared_job["prevhash"])[::-1]
-                merkle_root_bytes = bytes.fromhex(shared_job["merkle_root"])[::-1]
-                nbits_bytes = bytes.fromhex(shared_job["nbits"])[::-1]
-                static_header = version_bytes + prevhash_bytes + merkle_root_bytes + nbits_bytes
-                static_len = len(static_header)
-                # Reset nonce range for new job
-                nonce = nonce_start
+            # Update shared memory less frequently (every batch)
+            with shared_total_hashes.get_lock():
+                shared_total_hashes.value += batch_size
             
-            try:
-                # Process HUGE batches for maximum throughput
-                batch_size = 100000  # Even larger batches for processes
+            # Update time occasionally (every 10 batches = ~1M hashes)
+            if loop_count % (batch_size * 10) == 0:
                 current_time = int(time.time())
                 ntime_bytes = pack_i("<I", current_time)
-                
-                # Pre-allocate bytearray for header (reuse across iterations)
-                header_buf = bytearray(80)  # Bitcoin header is 80 bytes
-                header_buf[:static_len] = static_header
-                
-                # Ultra-optimized inner loop (no GIL blocking!)
-                for _ in range(batch_size):
-                    # Build nonce bytes (minimal operations)
-                    nonce_low = nonce & nonce_mask
-                    extranonce2_bytes = pack_i("<I", nonce_low)
-                    nonce_bytes = pack_i("<I", nonce)
-                    
-                    # Build complete header using bytearray (in-place, no allocation)
-                    header_buf[static_len:static_len+4] = extranonce2_bytes
-                    header_buf[static_len+4:static_len+8] = ntime_bytes
-                    header_buf[static_len+8:static_len+12] = nonce_bytes
-                    
-                    # Double SHA-256 (inline, no function call overhead)
-                    hash1 = sha256(bytes(header_buf)).digest()
-                    hash2 = sha256(hash1).digest()
-                    hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse inline
-                    
-                    if hash_int < target:
-                        # Found a share! Submit via queue (main process will handle it)
-                        try:
-                            share_queue.put((job_id, extranonce2_bytes, ntime_bytes, nonce), block=False)
-                        except:
-                            pass  # Queue full, skip this share
-                    
-                    # Increment local counter
-                    local_hash_count += 1
-                    loop_count += 1
-                    nonce += 1
-                    
-                    # Wrap nonce if needed
-                    if nonce >= nonce_end:
-                        nonce = nonce_start
-                
-                # Update shared memory less frequently (every batch)
-                with shared_total_hashes.get_lock():
-                    shared_total_hashes.value += batch_size
-                
-                # Update time occasionally (every 10 batches = ~1M hashes)
-                if loop_count % (batch_size * 10) == 0:
-                    current_time = int(time.time())
-                    ntime_bytes = pack_i("<I", current_time)
-            except Exception as e:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Worker {worker_id} error: {e}")
-                import traceback
-                traceback.print_exc()
-                time.sleep(0.1)  # Brief pause before retrying
-                continue  # Continue loop instead of breaking
-    
+        except Exception as e:
+            print(f"Worker {worker_id} error: {e}")
+            import traceback
+            traceback.print_exc()
+            time.sleep(0.1)
+            continue
     def submit_share(self, job_id: str, extranonce2: bytes, ntime: bytes, nonce: int):
         """Submit a share to the pool"""
         submit_id = self.submit_id
