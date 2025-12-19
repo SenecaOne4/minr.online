@@ -978,10 +978,12 @@ echo "Installation Complete!"
 echo "=========================================="
 echo ""
 echo "Miner installed to: $INSTALL_DIR"
-echo "Start mining with: $LAUNCHER_SCRIPT"
 echo ""
-echo "Or run directly: python3 $MINER_SCRIPT"
+echo "Starting miner..."
 echo ""
+
+# Automatically start mining
+exec "$LAUNCHER_SCRIPT"
 `;
 }
 
@@ -1168,10 +1170,12 @@ echo "Installation Complete!"
 echo "=========================================="
 echo ""
 echo "Miner installed to: $INSTALL_DIR"
-echo "Start mining with: $LAUNCHER_SCRIPT"
 echo ""
-echo "Or run directly: python3 $MINER_SCRIPT"
+echo "Starting miner..."
 echo ""
+
+# Automatically start mining
+exec "$LAUNCHER_SCRIPT"
 `;
 }
 
@@ -1330,10 +1334,12 @@ Write-Host "Installation Complete!"
 Write-Host "=========================================="
 Write-Host ""
 Write-Host "Miner installed to: $INSTALL_DIR"
-Write-Host "Start mining with: $LAUNCHER_SCRIPT"
 Write-Host ""
-Write-Host "Or run directly: $pythonCmd $MINER_SCRIPT"
+Write-Host "Starting miner..."
 Write-Host ""
+
+# Automatically start mining
+& $LAUNCHER_SCRIPT
 `;
 }
 
