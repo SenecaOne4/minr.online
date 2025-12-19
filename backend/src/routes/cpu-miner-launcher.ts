@@ -843,7 +843,7 @@ if [ -z "${pythonScriptB64}" ]; then
     exit 1
 fi
 
-log "Decoding miner script (base64 length: ${#pythonScriptB64})..."
+log "Decoding miner script..."
 echo "${pythonScriptB64}" | base64 -d > "$MINER_SCRIPT" 2>&1
 DECODE_EXIT=$?
 
@@ -1022,7 +1022,7 @@ if [ -z "${pythonScriptB64}" ]; then
     exit 1
 fi
 
-log "Decoding miner script (base64 length: ${#pythonScriptB64})..."
+log "Decoding miner script..."
 echo "${pythonScriptB64}" | base64 -d > "$MINER_SCRIPT" 2>&1
 DECODE_EXIT=$?
 
