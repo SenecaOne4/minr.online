@@ -899,11 +899,16 @@ fi
 log "Configuration fetched successfully"
 
 # Parse config to get values for Python script
-STRATUM_HOST=$(cat "$CONFIG_FILE" | grep -o '"host": "[^"]*"' | cut -d'"' -f4)
-STRATUM_PORT=$(cat "$CONFIG_FILE" | grep -o '"port": [0-9]*' | grep -o '[0-9]*')
-WALLET=$(cat "$CONFIG_FILE" | grep -o '"wallet": "[^"]*"' | cut -d'"' -f4)
-WORKER=$(cat "$CONFIG_FILE" | grep -o '"worker": "[^"]*"' | cut -d'"' -f4)
-USER_EMAIL=$(cat "$CONFIG_FILE" | grep -o '"user_email": "[^"]*"' | cut -d'"' -f4 || echo "user")
+log "Parsing configuration file..."
+
+# Use Python to parse JSON safely (more reliable than grep/cut)
+STRATUM_HOST=$(python3 -c "import json, sys; data=json.load(open('$CONFIG_FILE')); print(data.get('stratum', {}).get('host', ''))" 2>/dev/null || echo "")
+STRATUM_PORT=$(python3 -c "import json, sys; data=json.load(open('$CONFIG_FILE')); print(data.get('stratum', {}).get('port', 3333))" 2>/dev/null || echo "3333")
+WALLET=$(python3 -c "import json, sys; data=json.load(open('$CONFIG_FILE')); print(data.get('wallet', ''))" 2>/dev/null || echo "")
+WORKER=$(python3 -c "import json, sys; data=json.load(open('$CONFIG_FILE')); print(data.get('worker', ''))" 2>/dev/null || echo "")
+USER_EMAIL=$(python3 -c "import json, sys; data=json.load(open('$CONFIG_FILE')); print(data.get('user_email', data.get('user', 'user')))" 2>/dev/null || echo "user")
+
+log "Parsed values: STRATUM_HOST=$STRATUM_HOST, STRATUM_PORT=$STRATUM_PORT, WALLET=$WALLET, WORKER=$WORKER, USER_EMAIL=$USER_EMAIL"
 
 # Export variables for Python script
 export USER_EMAIL
@@ -914,7 +919,7 @@ export WORKER
 export API_URL
 export AUTH_TOKEN
 
-log "Parsed configuration: host=$STRATUM_HOST, port=$STRATUM_PORT, wallet=$WALLET"
+log "Variables exported, proceeding to configure miner script..."
 
 # Replace placeholders in Python script using Python (more reliable than sed)
 log "Configuring miner script..."
