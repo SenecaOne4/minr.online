@@ -55,7 +55,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       console.log(`[miner-stats] Updating existing session ${sessionId} for worker ${finalWorkerName}`);
       
       // Calculate duration and average hashrate
-      const duration = (Date.now() - new Date(existingSession.created_at).getTime()) / 1000;
+      const duration = (Date.now() - new Date(activeSession.created_at).getTime()) / 1000;
       const avgHashrate = duration > 0 ? totalHashes / duration : hashesPerSecond || 0;
 
       // Update session stats
