@@ -20,18 +20,34 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
 
     const finalWorkerName = workerName || `minr.${req.user?.email?.split('@')[0] || 'user'}`;
     
-    // Find the most recent active session for this user/worker (updated within last 5 minutes)
+    // Find the most recent active session for this user/worker (updated within last 10 minutes)
     // This prevents creating duplicate sessions if stats are reported frequently
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     
-    const { data: existingSessions, error: findError } = await supabase
+    // First try to find recently updated sessions
+    let { data: existingSessions, error: findError } = await supabase
       .from('mining_sessions')
       .select('id, created_at, updated_at')
       .eq('user_id', userId)
       .eq('worker_name', finalWorkerName)
-      .gte('updated_at', fiveMinutesAgo)  // Only consider recently updated sessions
+      .gte('updated_at', tenMinutesAgo)  // Only consider recently updated sessions
       .order('updated_at', { ascending: false })
       .limit(1);
+    
+    // If no recently updated session, check for any session with this worker name (fallback)
+    if (!existingSessions || existingSessions.length === 0) {
+      const { data: anySession } = await supabase
+        .from('mining_sessions')
+        .select('id, created_at, updated_at')
+        .eq('user_id', userId)
+        .eq('worker_name', finalWorkerName)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      
+      if (anySession && anySession.length > 0) {
+        existingSessions = anySession;
+      }
+    }
 
     let sessionId: string;
 
