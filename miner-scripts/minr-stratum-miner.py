@@ -33,7 +33,7 @@ TEST_LOW_DIFF = False
 
 
 # Standalone function for multiprocessing (must be outside class to avoid pickling issues)
-def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, shared_job, share_queue):
+def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, shared_job, share_queue, debug_mode=False):
     """Mining worker process (multiprocessing - bypasses GIL for true parallelism)"""
     # Wait for first job
     while shared_running.value and not shared_job:
@@ -63,6 +63,7 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
     nbits = ""
     prevhash = ""
     extranonce2_size = 4
+    job_ntime = ""  # ntime from job (minimum time)
     
     # Local hash counter (64-bit unsigned)
     local_hash_count = 0
@@ -89,13 +90,25 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
             nbits = shared_job.get("nbits", "")
             prevhash = shared_job.get("prevhash", "")
             extranonce2_size = shared_job.get("extranonce2_size", 4)
+            job_ntime = shared_job.get("ntime", "")
             # Reset nonce range for new job
             nonce = nonce_start
+            
+            if debug_mode:
+                print(f"[DEBUG Worker {worker_id}] New job: {job_id}, target={hex(target)[:20]}..., extranonce2_size={extranonce2_size}")
         
         try:
             # Process batches for maximum throughput
             batch_size = 100000
-            current_time = int(time.time())
+            # Use job's ntime as minimum, but can use current time if later
+            if job_ntime:
+                try:
+                    job_ntime_int = int(job_ntime, 16) if isinstance(job_ntime, str) else int(job_ntime)
+                    current_time = max(job_ntime_int, int(time.time()))
+                except:
+                    current_time = int(time.time())
+            else:
+                current_time = int(time.time())
             ntime_bytes = pack_i("<I", current_time)
             
             # Pre-allocate bytearray for header (reuse across iterations)
@@ -150,23 +163,23 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                 hash2 = sha256(hash1).digest()
                 hash_int = from_bytes(hash2[::-1], byteorder="big")  # Reverse for big-endian comparison
                 
-                # Debug: log first few hash comparisons to verify target
-                if DEBUG_STRATUM and loop_count < 10:
-                    print(f"[DEBUG] Hash check: hash={hex(hash_int)[:20]}..., target={hex(target)[:20]}..., hash < target = {hash_int < target}")
+                # Debug: log first few hash comparisons to verify target (works in multiprocessing)
+                if debug_mode and loop_count < 10:
+                    print(f"[DEBUG Worker {worker_id}] Hash check: hash={hex(hash_int)[:20]}..., target={hex(target)[:20]}..., hash < target = {hash_int < target}")
                 
                 if hash_int < target:
                     # Found a share! Submit via queue (main process will handle it)
-                    if DEBUG_STRATUM:
-                        print(f"[DEBUG] ✓ SHARE FOUND! job_id={job_id}, hash={hash2.hex()[:16]}..., target={hex(target)[:20]}...")
+                    if debug_mode:
+                        print(f"[DEBUG Worker {worker_id}] ✓ SHARE FOUND! job_id={job_id}, hash={hash2.hex()[:16]}..., target={hex(target)[:20]}...")
                     try:
                         # Convert extranonce2 to hex (must match extranonce2_size)
                         extranonce2_hex = extranonce2_bytes.hex()
                         share_queue.put((job_id, extranonce2_hex, ntime_bytes.hex(), nonce), block=False)
-                        if DEBUG_STRATUM:
-                            print(f"[DEBUG] Share queued: extranonce2={extranonce2_hex}, ntime={ntime_bytes.hex()}, nonce={nonce}")
+                        if debug_mode:
+                            print(f"[DEBUG Worker {worker_id}] Share queued: extranonce2={extranonce2_hex}, ntime={ntime_bytes.hex()}, nonce={nonce}")
                     except Exception as e:
-                        if DEBUG_STRATUM:
-                            print(f"[DEBUG] Failed to queue share: {e}")
+                        if debug_mode:
+                            print(f"[DEBUG Worker {worker_id}] Failed to queue share: {e}")
                         pass  # Queue full, skip this share
                 
                 # Increment local counter (64-bit unsigned)
@@ -428,6 +441,7 @@ class StratumMiner:
                     "merkle_branches": merkle_branches if isinstance(merkle_branches, list) else [],
                     "version": version,
                     "nbits": nbits,
+                    "ntime": ntime,  # Include ntime from job
                     "target": target,
                     "extranonce2_size": self.extranonce2_size
                 })
@@ -545,7 +559,7 @@ class StratumMiner:
         for i in range(num_threads):
             process = multiprocessing.Process(
                 target=mine_worker_process,
-                args=(i, self.shared_total_hashes, self.shared_running, self.shared_job, self.share_queue),
+                args=(i, self.shared_total_hashes, self.shared_running, self.shared_job, self.share_queue, DEBUG_STRATUM),
                 daemon=True
             )
             process.start()
