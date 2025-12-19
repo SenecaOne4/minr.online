@@ -784,6 +784,9 @@ class StratumMiner:
             print("Debug mode: ON")
         if TEST_LOW_DIFF:
             print("Test mode: Low difficulty")
+        if PROFILE_MODE:
+            backend_name, _ = _select_sha256_backend()
+            print(f"Profile mode: ON (SHA256 backend: {backend_name})")
         print("=" * 60)
         
         # Start message receiver thread
