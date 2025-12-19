@@ -181,8 +181,8 @@ def mine_worker_process(worker_id: int, shared_total_hashes, shared_running, sha
                     hash_bytes_repr = hash2.hex()[:32]  # First 16 bytes as hex
                     debug_msg = f"[DEBUG Worker {worker_id}] Hash check #{loop_count}:\n"
                     debug_msg += f"  Raw hash bytes (hex): {hash2.hex()}\n"
-                    debug_msg += f"  Hash as int (little-endian): {hash_int}\n"
-                    debug_msg += f"  Target as int (little-endian): {target}\n"
+                    debug_msg += f"  Hash as int (big-endian): {hash_int}\n"
+                    debug_msg += f"  Target as int (big-endian): {target}\n"
                     debug_msg += f"  Hash < target: {hash_int < target}\n"
                     # Also check if hash is close to target (within 10% to see if we're in the right ballpark)
                     if target > 0:
