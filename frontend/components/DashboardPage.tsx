@@ -304,7 +304,35 @@ export default function DashboardPage({ user }: { user: any }) {
         {(hasPaidEntryFee || profile?.exempt_from_entry_fee || isAdmin) && (
           <div className="mb-6">
             <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">Active Mining Instances</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-white">Active Mining Instances</h2>
+                <button
+                  onClick={async () => {
+                    if (!supabase) return;
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) return;
+                    
+                    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+                    const response = await fetch(`${apiBaseUrl}/api/miner-stats/cleanup?olderThanMinutes=5`, {
+                      method: 'DELETE',
+                      headers: {
+                        Authorization: `Bearer ${session.access_token}`,
+                      },
+                    });
+                    
+                    if (response.ok) {
+                      const result = await response.json();
+                      alert(`Cleaned up ${result.deletedCount || 0} old sessions`);
+                      loadMiningInstances(); // Refresh the list
+                    } else {
+                      alert('Failed to clean up sessions');
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-600/80 hover:bg-red-700 text-white rounded-lg text-sm transition-all"
+                >
+                  Clean Up Old Sessions
+                </button>
+              </div>
               {miningInstances && miningInstances.count > 0 ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-4">
