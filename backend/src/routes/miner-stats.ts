@@ -20,32 +20,22 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
 
     const finalWorkerName = workerName || `minr.${req.user?.email?.split('@')[0] || 'user'}`;
     
-    // Find the most recent session for this user/worker
-    // Check both updated_at and created_at to handle cases where updated_at might be null
+    // Find the most recent active session for this user/worker
+    // Schema uses started_at (not created_at or updated_at)
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     
-    // Try to find any session for this worker (most recent first)
-    // Use COALESCE to handle null updated_at by falling back to created_at
+    // Find sessions started within last 10 minutes (still active)
     const { data: existingSessions, error: findError } = await supabase
       .from('mining_sessions')
-      .select('id, created_at, updated_at')
+      .select('id, started_at')
       .eq('user_id', userId)
       .eq('worker_name', finalWorkerName)
-      .order('created_at', { ascending: false })
+      .gte('started_at', tenMinutesAgo)  // Active sessions started recently
+      .is('ended_at', null)  // Not ended yet
+      .order('started_at', { ascending: false })
       .limit(1);
     
-    // Check if the most recent session is still "active" (created or updated within last 10 minutes)
-    let activeSession = null;
-    if (existingSessions && existingSessions.length > 0) {
-      const session = existingSessions[0];
-      const lastActivity = session.updated_at || session.created_at;
-      const lastActivityTime = new Date(lastActivity).getTime();
-      const tenMinutesAgoTime = Date.now() - 10 * 60 * 1000;
-      
-      if (lastActivityTime >= tenMinutesAgoTime) {
-        activeSession = session;
-      }
-    }
+    let activeSession = existingSessions && existingSessions.length > 0 ? existingSessions[0] : null;
 
     let sessionId: string;
 
@@ -55,10 +45,10 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       console.log(`[miner-stats] Updating existing session ${sessionId} for worker ${finalWorkerName}`);
       
       // Calculate duration and average hashrate
-      const duration = (Date.now() - new Date(activeSession.created_at).getTime()) / 1000;
+      const duration = (Date.now() - new Date(activeSession.started_at).getTime()) / 1000;
       const avgHashrate = duration > 0 ? totalHashes / duration : hashesPerSecond || 0;
 
-      // Update session stats
+      // Update session stats (schema doesn't have updated_at, just update stats)
       const { error: updateError } = await supabase
         .from('mining_sessions')
         .update({
@@ -66,7 +56,6 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
           avg_hashrate: avgHashrate,
           accepted_shares: acceptedShares || 0,
           rejected_shares: rejectedShares || 0,
-          updated_at: new Date().toISOString(),
         })
         .eq('id', sessionId);
 
@@ -118,13 +107,13 @@ router.delete('/cleanup', authMiddleware, async (req: AuthenticatedRequest, res:
 
     const cutoffTime = new Date(Date.now() - olderThanMinutes * 60 * 1000).toISOString();
 
-    // Delete old sessions for this user that haven't been updated recently
-    // Use created_at since updated_at column doesn't exist in the schema
+    // Delete old sessions for this user that started more than X minutes ago
+    // Schema uses started_at, not created_at or updated_at
     const { data: sessionsToDelete, error: findError } = await supabase
       .from('mining_sessions')
       .select('id')
       .eq('user_id', userId)
-      .lt('created_at', cutoffTime);
+      .lt('started_at', cutoffTime);
 
     if (findError) {
       console.error('[miner-stats] Error finding sessions to delete:', findError);
