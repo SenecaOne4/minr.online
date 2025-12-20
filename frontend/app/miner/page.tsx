@@ -289,7 +289,7 @@ export default function MinerPage() {
           try {
             const parsed = JSON.parse(line);
 
-          // Handle mining.subscribe response
+            // Handle mining.subscribe response
           if (parsed.id === 1 && parsed.result) {
             const result = parsed.result;
             if (Array.isArray(result) && result.length >= 2) {
@@ -972,11 +972,12 @@ export default function MinerPage() {
                             <span className="text-green-400">✅</span>
                             <span className="text-gray-300">Ready to mine</span>
                           </>
-                        )}
-                      </div>
-                    </div>
                   )}
+                  </div>
                 </div>
+              </div>
+            )}
+          </div>
 
                 <div className="bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-white/10">
                   <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Connection Status</label>
@@ -1004,14 +1005,15 @@ export default function MinerPage() {
                     <span>🔑</span>
                     <span>ExtraNonce</span>
                   </h2>
-                <div className="space-y-3 font-mono text-sm">
-                  <div>
-                    <label className="text-gray-400">extranonce1:</label>
-                    <p className="break-all">{extraNonce.extranonce1}</p>
-                  </div>
-                  <div>
-                    <label className="text-gray-400">extranonce2_size:</label>
-                    <p>{extraNonce.extranonce2Size}</p>
+                  <div className="space-y-3 font-mono text-sm">
+                    <div>
+                      <label className="text-gray-400">extranonce1:</label>
+                      <p className="break-all">{extraNonce.extranonce1}</p>
+                    </div>
+                    <div>
+                      <label className="text-gray-400">extranonce2_size:</label>
+                      <p>{extraNonce.extranonce2Size}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1026,7 +1028,7 @@ export default function MinerPage() {
                     <span>⚡</span>
                     <span>Current Job</span>
                   </h2>
-                <div className="space-y-3 font-mono text-sm">
+                  <div className="space-y-3 font-mono text-sm">
                   <div>
                     <label className="text-gray-400">Job ID:</label>
                     <p className="break-all">{currentJob.jobId}</p>
@@ -1075,6 +1077,7 @@ export default function MinerPage() {
                       <p className="break-all text-xs">{currentJob.target}</p>
                     </div>
                   )}
+                  </div>
                 </div>
               </div>
             )}
