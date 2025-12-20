@@ -397,7 +397,28 @@ function generateLauncherHTML(config: {
         </div>
       </div>
       
-      <div class="card" style="margin-top: 20px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3);">
+      <!-- macOS Bundle Download (if macOS detected) -->
+      <div id="macBundleCard" class="card hidden" style="margin-top: 20px; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3);">
+        <h3 style="color: #6ee7b7; margin-bottom: 10px; font-size: 1.2rem;">🍎 macOS Fast Miner Bundle (Recommended)</h3>
+        <p style="color: #cbd5e1; margin-bottom: 15px; line-height: 1.6;">
+          Self-contained app bundle with embedded Python and native extension.
+          <strong>No Terminal commands needed</strong> - just unzip and double-click!
+        </p>
+        <ul style="color: #cbd5e1; line-height: 1.8; padding-left: 20px; margin-bottom: 15px;">
+          <li>Native C extension included (~10^7+ H/s)</li>
+          <li>No system Python, pip, or Homebrew required</li>
+          <li>Works on Apple Silicon and Intel Macs</li>
+        </ul>
+        <button id="macBundleBtn" class="btn-primary" onclick="downloadMacBundle()" style="background: linear-gradient(135deg, #10b981, #059669);">
+          📥 Download macOS App Bundle (~80MB)
+        </button>
+        <p style="color: #9ca3af; font-size: 0.85rem; margin-top: 10px; font-style: italic;">
+          💡 First run on macOS: If macOS blocks it, right-click the app → Open (first time only)
+        </p>
+      </div>
+      
+      <!-- Traditional Installation (for non-macOS or fallback) -->
+      <div id="traditionalCard" class="card" style="margin-top: 20px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3);">
         <h3 style="color: #93c5fd; margin-bottom: 10px; font-size: 1.1rem;">📋 Installation Instructions</h3>
         <ol style="color: #cbd5e1; line-height: 1.8; padding-left: 20px;">
           <li>Click the button below to download installation scripts</li>
@@ -460,10 +481,24 @@ function generateLauncherHTML(config: {
     
     function detectPlatform() {
       const userAgent = navigator.userAgent || navigator.platform || '';
-      if (userAgent.includes('Mac')) return 'mac';
+      const platform = navigator.platform || '';
+      if (userAgent.includes('Mac') || platform.toUpperCase().indexOf('MAC') >= 0) return 'mac';
       if (userAgent.includes('Win')) return 'windows';
       if (userAgent.includes('Linux')) return 'linux';
       return 'unknown';
+    }
+    
+    function downloadMacBundle() {
+      const bundleUrl = 'https://minr.online/downloads/minr-online-macos.zip';
+      addLog('info', 'Downloading macOS bundle...');
+      const a = document.createElement('a');
+      a.href = bundleUrl;
+      a.download = 'minr-online-macos.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      addLog('success', 'Download started! After download: unzip and double-click Minr.online.app');
+      updateStatus('Download started! Unzip the file and double-click Minr.online.app', 'success');
     }
     
     function addLog(type, message) {
