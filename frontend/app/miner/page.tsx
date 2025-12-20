@@ -972,12 +972,11 @@ export default function MinerPage() {
                             <span className="text-green-400">✅</span>
                             <span className="text-gray-300">Ready to mine</span>
                           </>
+                        )}
+                      </div>
+                    </div>
                   )}
-                  </div>
                 </div>
-              </div>
-            )}
-          </div>
 
                 <div className="bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-white/10">
                   <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Connection Status</label>
