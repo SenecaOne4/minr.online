@@ -393,8 +393,23 @@ function generateLauncherHTML(config: {
     <div class="card">
       <div id="statusContainer">
         <div class="status info" id="statusMessage">
-          Ready to install. Click "Install Dependencies" to begin.
+          Ready to install. Click "Download Installation Scripts" to begin.
         </div>
+      </div>
+      
+      <div class="card" style="margin-top: 20px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3);">
+        <h3 style="color: #93c5fd; margin-bottom: 10px; font-size: 1.1rem;">📋 Installation Instructions</h3>
+        <ol style="color: #cbd5e1; line-height: 1.8; padding-left: 20px;">
+          <li>Click the button below to download installation scripts</li>
+          <li>Open Terminal (Mac/Linux) or PowerShell (Windows)</li>
+          <li>Navigate to your Downloads folder: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px;">cd ~/Downloads</code></li>
+          <li>Make scripts executable: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px;">chmod +x launch-install.sh install-minr-miner.sh</code></li>
+          <li>Run the launcher: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px;">./launch-install.sh</code></li>
+          <li>Or run directly: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px;">bash install-minr-miner.sh</code></li>
+        </ol>
+        <p style="color: #9ca3af; font-size: 0.9rem; margin-top: 10px; font-style: italic;">
+          Note: macOS may remove execute permissions from downloads. The scripts will fix this automatically.
+        </p>
       </div>
       
       <div class="progress-bar hidden" id="progressBar">
@@ -402,7 +417,7 @@ function generateLauncherHTML(config: {
       </div>
       
       <button id="installBtn" class="btn-primary" onclick="startInstallation()">
-        🚀 Start Installation (Auto-Run)
+        📥 Download Installation Scripts
       </button>
       
       <button id="mineBtn" class="btn-secondary hidden" onclick="startMining()">
