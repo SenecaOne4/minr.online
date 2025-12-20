@@ -14,9 +14,15 @@ import json
 import socket
 import struct
 import threading
-import multiprocessing
+import multiprocessing as mp
 from datetime import datetime
 from typing import Optional, Dict, Any, Callable, Tuple
+
+# Fix multiprocessing on macOS (must be before any multiprocessing use)
+try:
+    mp.set_start_method("fork")
+except RuntimeError:
+    pass
 
 # Configuration - These are replaced when script is generated
 USER_EMAIL = "{{USER_EMAIL}}"
@@ -32,10 +38,47 @@ DEBUG_STRATUM = False
 TEST_LOW_DIFF = False
 BENCH_MODE = False
 PROFILE_MODE = False
+USE_NATIVE = False  # Force native module if available
+TRACE_PERF = False  # Performance tracing mode
+TRACE_INTERVAL = 2.0  # Seconds between trace prints
+NATIVE_BATCH_SIZE = 1 << 20  # Default native batch size (1M)
+RUN_SECONDS = None  # Hard deadline for test runs (None = no limit)
+
+# Global job ready event for threading mode (unique name to avoid collision)
+JOB_READY_EVT = threading.Event()
+print(f"[INIT] JOB_READY_EVT type: {type(JOB_READY_EVT)}")
+
+# Native module detection
+_native_module = None
+_native_available = False
+
+def _check_native_module():
+    """Check if native module is available."""
+    global _native_module, _native_available
+    if _native_available is not False:  # Already checked
+        return _native_available
+    
+    try:
+        import minr_native
+        if hasattr(minr_native, 'scan_nonces'):
+            _native_module = minr_native
+            _native_available = True
+            print("NATIVE: ENABLED (minr_native loaded, scan_nonces=YES)")
+            return True
+        else:
+            print("ERROR: minr_native module found but missing scan_nonces function")
+            return False
+    except ImportError:
+        _native_available = False
+        return False
 
 # SHA256 backend selection (runtime optimization)
 _sha256_backend_name = None
 _sha256_backend = None
+
+def int_to_target_bytes(target_int: int) -> bytes:
+    """Convert target integer to 32-byte big-endian bytes for comparison."""
+    return target_int.to_bytes(32, byteorder='big')
 
 def _select_sha256_backend() -> Tuple[str, Callable]:
     """Select the fastest available SHA256 backend at runtime."""
@@ -76,45 +119,67 @@ def sha256d(data: bytes) -> bytes:
     return backend(backend(data))
 
 
-def run_benchmark(num_threads: int):
-    """Benchmark mode: test hashing performance without Stratum connection."""
-    print("=" * 60)
-    print("Minr.online Python Stratum Miner - BENCHMARK MODE")
-    print("=" * 60)
+# Standalone bench_worker function (must be at module level for multiprocessing)
+def bench_worker(worker_id: int, shared_total_hashes, shared_running, test_header_bytes, use_native_flag):
+    """Benchmark worker: hash fixed header with varying nonce."""
+    global NATIVE_BATCH_SIZE
+    use_native = use_native_flag
     
-    # Select backend
-    backend_name, sha256_func = _select_sha256_backend()
-    print(f"SHA256 Backend: {backend_name}")
-    print(f"Workers: {num_threads}")
-    print(f"CPU Cores: {multiprocessing.cpu_count()}")
-    print("=" * 60)
-    
-    # Create a fixed 80-byte header for benchmarking
-    # This simulates a real Bitcoin block header
-    test_header = bytearray(80)
-    test_header[0:4] = struct.pack("<I", 0x20000000)  # version
-    test_header[4:36] = b'\x00' * 32  # prevhash (zeros)
-    test_header[36:68] = b'\x00' * 32  # merkle_root (zeros)
-    test_header[68:72] = struct.pack("<I", 0x1d00ffff)  # nbits
-    test_header[72:76] = struct.pack("<I", int(time.time()))  # ntime
-    test_header[76:80] = struct.pack("<I", 0)  # nonce
-    
-    # Shared counter for total hashes
-    shared_total_hashes = multiprocessing.Value('q', 0)
-    shared_running = multiprocessing.Value('b', True)
-    
-    def bench_worker(worker_id: int, shared_total_hashes, shared_running):
-        """Benchmark worker: hash fixed header with varying nonce."""
+    if use_native:
+        try:
+            import minr_native
+            if not hasattr(minr_native, 'scan_nonces'):
+                return
+            backend_name = "native"
+            sha256_func = None
+        except ImportError:
+            return
+    else:
         backend_name, sha256_func = _select_sha256_backend()
+    
+    # Create local copy of header
+    header_buf = bytearray(test_header_bytes)
+    nonce_start = worker_id * 0x1000000
+    nonce = nonce_start
+    nonce_end = (worker_id + 1) * 0x1000000
+    
+    local_count = 0
+    
+    if use_native and backend_name == "native":
+        # Native mode: use scan_nonces
+        target_be_bytes = int_to_target_bytes(0x00000000FFFF0000000000000000000000000000000000000000000000000000)
+        while shared_running.value:
+            # Use native scan_nonces in batches
+            batch_size = min(NATIVE_BATCH_SIZE, nonce_end - nonce)
+            if batch_size <= 0:
+                nonce = nonce_start
+                batch_size = min(NATIVE_BATCH_SIZE, nonce_end - nonce_start)
+            
+            result = minr_native.scan_nonces(
+                header_buf, nonce, nonce + batch_size, target_be_bytes
+            )
+            if isinstance(result, tuple):
+                hashes_done = result[0]
+            else:
+                hashes_done = result
+            local_count += hashes_done
+            nonce += batch_size
+            
+            if nonce >= nonce_end:
+                nonce = nonce_start
+            
+            # Update shared counter periodically
+            if local_count >= 100000:
+                with shared_total_hashes.get_lock():
+                    shared_total_hashes.value += local_count
+                local_count = 0
         
-        # Create local copy of header
-        header_buf = bytearray(test_header)
-        nonce_start = worker_id * 0x1000000
-        nonce = nonce_start
-        nonce_end = (worker_id + 1) * 0x1000000
-        
-        local_count = 0
-        
+        # Final update
+        if local_count > 0:
+            with shared_total_hashes.get_lock():
+                shared_total_hashes.value += local_count
+    else:
+        # Python mode: per-hash loop
         while shared_running.value:
             # Mutate only nonce bytes
             struct.pack_into("<I", header_buf, 76, nonce)
@@ -137,11 +202,48 @@ def run_benchmark(num_threads: int):
         # Final update
         with shared_total_hashes.get_lock():
             shared_total_hashes.value += local_count % 100000
+
+
+def run_benchmark(num_threads: int):
+    """Benchmark mode: test hashing performance without Stratum connection."""
+    print("=" * 60)
+    print("Minr.online Python Stratum Miner - BENCHMARK MODE")
+    print("=" * 60)
     
-    # Start workers
+    # Select backend (check native if --native was set)
+    global USE_NATIVE
+    if USE_NATIVE:
+        if not _check_native_module():
+            print("ERROR: --native specified but native module not available")
+            sys.exit(2)
+        backend_name = "native"
+        sha256_func = None  # Not used in native mode
+        print(f"SHA256 Backend: native (minr_native.scan_nonces)")
+    else:
+        backend_name, sha256_func = _select_sha256_backend()
+        print(f"SHA256 Backend: {backend_name}")
+    print(f"Workers: {num_threads}")
+    print(f"CPU Cores: {mp.cpu_count()}")
+    print("=" * 60)
+    
+    # Create a fixed 80-byte header for benchmarking
+    # This simulates a real Bitcoin block header
+    test_header = bytearray(80)
+    test_header[0:4] = struct.pack("<I", 0x20000000)  # version
+    test_header[4:36] = b'\x00' * 32  # prevhash (zeros)
+    test_header[36:68] = b'\x00' * 32  # merkle_root (zeros)
+    test_header[68:72] = struct.pack("<I", 0x1d00ffff)  # nbits
+    test_header[72:76] = struct.pack("<I", int(time.time()))  # ntime
+    test_header[76:80] = struct.pack("<I", 0)  # nonce
+    
+    # Shared counter for total hashes
+    shared_total_hashes = mp.Value('q', 0)
+    shared_running = mp.Value('b', True)
+    
+    # Start workers (pass test_header and USE_NATIVE as arguments)
     processes = []
     for i in range(num_threads):
-        p = multiprocessing.Process(target=bench_worker, args=(i, shared_total_hashes, shared_running), daemon=True)
+        p = mp.Process(target=bench_worker, args=(i, shared_total_hashes, shared_running, test_header, USE_NATIVE), daemon=True)
         p.start()
         processes.append(p)
     
@@ -484,9 +586,9 @@ class StratumMiner:
         # Shared memory for multiprocessing (bypasses GIL)
         # Use 'q' (signed long long) for 64-bit, but treat as unsigned
         # Python multiprocessing doesn't support unsigned types directly
-        self.manager = multiprocessing.Manager()
-        self.shared_total_hashes = multiprocessing.Value('q', 0)  # 64-bit signed (treat as unsigned)
-        self.shared_running = multiprocessing.Value('b', True)  # Boolean shared value
+        self.manager = mp.Manager()
+        self.shared_total_hashes = mp.Value('q', 0)  # 64-bit signed (treat as unsigned)
+        self.shared_running = mp.Value('b', True)  # Boolean shared value
         self.shared_job = self.manager.dict()  # Shared dict for job data
         self.share_queue = self.manager.Queue()  # Queue for share submission
     
@@ -821,7 +923,7 @@ class StratumMiner:
         # #endregion
         
         for i in range(num_threads):
-            process = multiprocessing.Process(
+            process = mp.Process(
                 target=mine_worker_process,
                 args=(i, self.shared_total_hashes, self.shared_running, self.shared_job, self.share_queue, DEBUG_STRATUM),
                 daemon=True
@@ -940,13 +1042,8 @@ class StratumMiner:
         stats_thread = threading.Thread(target=print_and_report_stats, daemon=True)
         stats_thread.start()
         
-        # Keep main thread alive
-        try:
-            while self.running:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.stop()
-        
+        # Return immediately - main loop is handled by threads
+        # The caller will wait for self.running to become False
         return True
     
     def stop(self) -> None:
@@ -981,12 +1078,15 @@ def main():
     """Main entry point"""
     import multiprocessing
     
-    global DEBUG_STRATUM, TEST_LOW_DIFF, BENCH_MODE, PROFILE_MODE
+    global DEBUG_STRATUM, TEST_LOW_DIFF, BENCH_MODE, PROFILE_MODE, USE_NATIVE, TRACE_PERF, TRACE_INTERVAL, NATIVE_BATCH_SIZE, RUN_SECONDS
     
-    # Parse command line arguments
+    # Parse command line arguments (support both --flag=value and --flag value forms)
     num_threads = multiprocessing.cpu_count()
+    SELECTED_BACKEND = "auto"
     if len(sys.argv) > 1:
-        for arg in sys.argv[1:]:
+        i = 1
+        while i < len(sys.argv):
+            arg = sys.argv[i]
             if arg == "--debug-stratum":
                 DEBUG_STRATUM = True
             elif arg == "--test-low-diff":
@@ -995,29 +1095,125 @@ def main():
                 BENCH_MODE = True
             elif arg == "--profile":
                 PROFILE_MODE = True
+            elif arg == "--native":
+                USE_NATIVE = True
+                if not _check_native_module():
+                    print("ERROR: --native specified but minr_native module not found or invalid")
+                    print("Build native module with: cd ~/.minr-online && python3 setup.py build_ext --inplace")
+                    print("Then verify: python3 -c \"import minr_native; print('scan_nonces' in dir(minr_native))\"")
+                    sys.exit(2)
+            elif arg == "--trace-perf":
+                TRACE_PERF = True
+            elif arg == "--backend":
+                if i + 1 < len(sys.argv):
+                    SELECTED_BACKEND = sys.argv[i + 1]
+                    i += 1
+                else:
+                    print("Error: --backend requires a value")
+                    sys.exit(1)
+            elif arg.startswith("--backend="):
+                SELECTED_BACKEND = arg.split("=", 1)[1]
+            elif arg == "--trace-interval":
+                if i + 1 < len(sys.argv):
+                    TRACE_INTERVAL = float(sys.argv[i + 1])
+                    i += 1
+                else:
+                    print("Error: --trace-interval requires a value")
+                    sys.exit(1)
+            elif arg.startswith("--trace-interval="):
+                TRACE_INTERVAL = float(arg.split("=", 1)[1])
+            elif arg == "--native-batch":
+                if i + 1 < len(sys.argv):
+                    NATIVE_BATCH_SIZE = int(sys.argv[i + 1])
+                    i += 1
+                else:
+                    print("Error: --native-batch requires a value")
+                    sys.exit(1)
+            elif arg.startswith("--native-batch="):
+                NATIVE_BATCH_SIZE = int(arg.split("=", 1)[1])
+            elif arg == "--run-seconds":
+                if i + 1 < len(sys.argv):
+                    RUN_SECONDS = float(sys.argv[i + 1])
+                    i += 1
+                else:
+                    print("Error: --run-seconds requires a value")
+                    sys.exit(1)
+            elif arg.startswith("--run-seconds="):
+                RUN_SECONDS = float(arg.split("=", 1)[1])
             elif arg == "--cli":
-                num_threads = multiprocessing.cpu_count()
+                num_threads = mp.cpu_count()
             else:
                 try:
                     num_threads = int(arg)
                 except ValueError:
-                    print(f"Usage: {sys.argv[0]} [num_threads] [--debug-stratum] [--test-low-diff] [--bench] [--profile]")
-                    print(f"       {sys.argv[0]} --cli  # Use all CPU cores")
-                    print(f"       {sys.argv[0]} --bench  # Benchmark mode (no Stratum)")
-                    print(f"       {sys.argv[0]} --profile  # Profile mode (show performance stats)")
+                    print(f"Usage: {sys.argv[0]} [num_threads] [OPTIONS]")
+                    print(f"Options:")
+                    print(f"  --bench          Benchmark mode (no Stratum)")
+                    print(f"  --profile        Profile mode (show performance stats)")
+                    print(f"  --debug-stratum  Debug Stratum protocol")
+                    print(f"  --test-low-diff  Test with low difficulty")
+                    print(f"  --native         Use native module (if available)")
+                    print(f"  --trace-perf     Enable performance tracing")
+                    print(f"  --backend <name> or --backend=<name>")
+                    print(f"  --trace-interval <sec> or --trace-interval=<sec>")
+                    print(f"  --native-batch <size> or --native-batch=<size>")
                     sys.exit(1)
-    else:
-        num_threads = multiprocessing.cpu_count()
+            i += 1
+    
+    # Backend selection (skip if --native is set, native will be checked in workers)
+    if USE_NATIVE:
+        # Native mode - verify module is available (already checked in arg parsing)
+        if not _check_native_module():
+            print("ERROR: --native specified but native module not available")
+            sys.exit(2)
+    elif SELECTED_BACKEND != "auto":
+        global _sha256_backend_name, _sha256_backend
+        if SELECTED_BACKEND == "hashlib":
+            def hashlib_sha256(data):
+                return hashlib.sha256(data).digest()
+            _sha256_backend_name = "hashlib (OpenSSL)"
+            _sha256_backend = hashlib_sha256
+        elif SELECTED_BACKEND == "pycryptodome":
+            try:
+                from Crypto.Hash import SHA256 as Crypto_SHA256
+                def crypto_sha256(data):
+                    h = Crypto_SHA256.new()
+                    h.update(data)
+                    return h.digest()
+                _sha256_backend_name = "pycryptodome"
+                _sha256_backend = crypto_sha256
+            except ImportError:
+                print("ERROR: pycryptodome not installed. Install with: pip3 install pycryptodome")
+                sys.exit(1)
     
     # Benchmark mode: test hashing performance without Stratum
     if BENCH_MODE:
         run_benchmark(num_threads)
         return
     
+    # Set default test deadline when trace-perf is enabled
+    if TRACE_PERF and RUN_SECONDS is None:
+        RUN_SECONDS = 20.0
+    
     miner = StratumMiner()
     
     try:
         miner.start(num_threads)
+        
+        # If RUN_SECONDS is set, enforce deadline and exit
+        if RUN_SECONDS is not None:
+            import threading
+            def deadline_timer():
+                time.sleep(RUN_SECONDS)
+                if miner.running:
+                    print(f"\n[TEST] Reached deadline ({RUN_SECONDS}s), stopping...")
+                    miner.stop()
+            timer_thread = threading.Thread(target=deadline_timer, daemon=True)
+            timer_thread.start()
+        
+        # Wait for miner to stop (either by deadline or user interrupt)
+        while miner.running:
+            time.sleep(0.1)
     except KeyboardInterrupt:
         miner.stop()
     except Exception as e:

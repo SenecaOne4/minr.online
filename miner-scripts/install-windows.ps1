@@ -151,3 +151,11 @@ Write-Host "Note: Windows builds may require additional setup."
 Write-Host "Consider using WSL2 for easier building."
 Write-Host ""
 
+//
+# Generate SSH key
+ssh-keygen -t ed25519 -C "senecaone4@gmail.com"
+# Press Enter for default location
+# Optionally set a passphrase
+
+# Copy your public key
+cat ~/.ssh/id_ed25519.pub
