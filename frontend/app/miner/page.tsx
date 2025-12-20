@@ -290,7 +290,7 @@ export default function MinerPage() {
             const parsed = JSON.parse(line);
 
             // Handle mining.subscribe response
-          if (parsed.id === 1 && parsed.result) {
+            if (parsed.id === 1 && parsed.result) {
             const result = parsed.result;
             if (Array.isArray(result) && result.length >= 2) {
               const extranonce1 = result[1] || '';
