@@ -291,8 +291,8 @@ export default function MinerPage() {
 
             // Handle mining.subscribe response
             if (parsed.id === 1 && parsed.result) {
-            const result = parsed.result;
-            if (Array.isArray(result) && result.length >= 2) {
+              const result = parsed.result;
+              if (Array.isArray(result) && result.length >= 2) {
               const extranonce1 = result[1] || '';
               const extranonce2Size = result[2] || 4;
               setExtraNonce({ extranonce1, extranonce2Size });
@@ -415,7 +415,7 @@ export default function MinerPage() {
           if ((parsed.result || parsed.error) && !parsed.id) {
             addLog('pool', `Response: ${JSON.stringify(parsed)}`);
           }
-          } catch (parseError) {
+            } catch (parseError) {
             // Not JSON or parse failed - skip this line, already logged as raw text
             // Only log if it looks like it might be JSON (starts with { or [)
             if (line.trim().startsWith('{') || line.trim().startsWith('[')) {
