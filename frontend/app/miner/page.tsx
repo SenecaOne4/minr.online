@@ -1118,4 +1118,3 @@ export default function MinerPage() {
     </div>
   );
 }
-
