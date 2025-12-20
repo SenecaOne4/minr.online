@@ -27,18 +27,34 @@ router.get('/user-stats', authMiddleware, async (req: AuthenticatedRequest, res:
       dateFilter.setDate(dateFilter.getDate() - 30);
     }
 
-    // Get total hashrate (sum of avg_hashrate from sessions)
+    // Get total hashrate (sum of avg_hashrate from ACTIVE sessions only)
+    // Filter to sessions active in the last 5 minutes to exclude stale sessions
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    
     let hashrateQuery = supabase!
       .from('mining_sessions')
-      .select('avg_hashrate')
-      .eq('user_id', userId);
+      .select('avg_hashrate, started_at, ended_at')
+      .eq('user_id', userId)
+      .gte('started_at', fiveMinutesAgo)
+      .is('ended_at', null);
 
-    if (dateFilter) {
+    if (dateFilter && new Date(dateFilter) > new Date(fiveMinutesAgo)) {
       hashrateQuery = hashrateQuery.gte('started_at', dateFilter.toISOString());
+    } else if (dateFilter) {
+      // If dateFilter is older than 5 minutes, use it but still require recent activity
+      hashrateQuery = hashrateQuery.gte('started_at', fiveMinutesAgo);
     }
 
     const { data: sessions } = await hashrateQuery;
-    const totalHashrate = sessions?.reduce((sum, s) => sum + parseFloat(s.avg_hashrate?.toString() || '0'), 0) || 0;
+    // Filter out invalid hashrate values and sum
+    const totalHashrate = sessions?.reduce((sum, s) => {
+      const hashrate = parseFloat(s.avg_hashrate?.toString() || '0');
+      // Only count valid hashrate (0 < hashrate < 1 TH/s)
+      if (hashrate > 0 && hashrate < 1000000000000) {
+        return sum + hashrate;
+      }
+      return sum;
+    }, 0) || 0;
 
     // Get total shares
     let sharesQuery = supabase!
@@ -77,27 +93,32 @@ router.get('/user-stats', authMiddleware, async (req: AuthenticatedRequest, res:
     const { data: payouts } = await earningsQuery;
     const totalEarnings = payouts?.reduce((sum, p) => sum + parseFloat(p.amount_btc?.toString() || '0'), 0) || 0;
 
-    // Get total uptime (sum of session durations)
-    const { data: allSessions } = await supabase!
+    // Get total uptime (sum of ACTIVE session durations only)
+    // Only count sessions active in the last 5 minutes
+    const { data: activeSessionsData } = await supabase!
       .from('mining_sessions')
-      .select('started_at, ended_at')
-      .eq('user_id', userId);
+      .select('started_at, ended_at, avg_hashrate')
+      .eq('user_id', userId)
+      .gte('started_at', fiveMinutesAgo)
+      .is('ended_at', null);
 
     let totalUptime = 0;
-    if (allSessions) {
-      for (const session of allSessions) {
-        const start = new Date(session.started_at).getTime();
-        const end = session.ended_at ? new Date(session.ended_at).getTime() : Date.now();
-        totalUptime += (end - start) / 1000; // Convert to seconds
+    let validActiveSessions = 0;
+    if (activeSessionsData) {
+      for (const session of activeSessionsData) {
+        const hashrate = parseFloat(session.avg_hashrate?.toString() || '0');
+        // Only count sessions with valid hashrate
+        if (hashrate > 0 && hashrate < 1000000000000) {
+          const start = new Date(session.started_at).getTime();
+          const end = Date.now();
+          totalUptime += (end - start) / 1000; // Convert to seconds
+          validActiveSessions++;
+        }
       }
     }
 
-    // Get active sessions count
-    const { count: activeSessions } = await supabase!
-      .from('mining_sessions')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .is('ended_at', null);
+    // Active sessions count (already calculated above)
+    const activeSessions = validActiveSessions;
 
     res.json({
       total_hashrate: totalHashrate,
@@ -196,27 +217,38 @@ router.get('/user-charts', authMiddleware, async (req: AuthenticatedRequest, res
     startDate.setDate(startDate.getDate() - daysAgo);
 
     if (type === 'hashrate') {
-      // Get hashrate over time (grouped by day)
+      // Get hashrate over time (grouped by day) - only ACTIVE sessions
+      // Filter to sessions active in the last 5 minutes
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const effectiveStartDate = new Date(Math.max(new Date(startDate).getTime(), new Date(fiveMinutesAgo).getTime()));
+      
       const { data: sessions } = await supabase!
         .from('mining_sessions')
-        .select('started_at, avg_hashrate')
+        .select('started_at, avg_hashrate, ended_at')
         .eq('user_id', userId)
-        .gte('started_at', startDate.toISOString())
+        .gte('started_at', effectiveStartDate.toISOString())
+        .is('ended_at', null)
         .order('started_at', { ascending: true });
 
-      // Group by day
+      // Group by day, filtering invalid hashrate values
       const dailyData: Record<string, { date: string; hashrate: number }> = {};
       if (sessions) {
         for (const session of sessions) {
-          const date = new Date(session.started_at).toISOString().split('T')[0];
-          if (!dailyData[date]) {
-            dailyData[date] = { date, hashrate: 0 };
+          const hashrate = parseFloat(session.avg_hashrate?.toString() || '0');
+          // Only include sessions with valid hashrate
+          if (hashrate > 0 && hashrate < 1000000000000) {
+            const date = new Date(session.started_at).toISOString().split('T')[0];
+            if (!dailyData[date]) {
+              dailyData[date] = { date, hashrate: 0 };
+            }
+            dailyData[date].hashrate += hashrate;
           }
-          dailyData[date].hashrate += parseFloat(session.avg_hashrate?.toString() || '0');
         }
       }
 
-      res.json(Object.values(dailyData));
+      // Sort by date and return
+      const sortedData = Object.values(dailyData).sort((a, b) => a.date.localeCompare(b.date));
+      res.json(sortedData);
     } else if (type === 'shares') {
       // Get shares over time (grouped by day)
       const { data: shares } = await supabase!
@@ -365,12 +397,16 @@ router.get('/my-instances', authMiddleware, async (req: AuthenticatedRequest, re
 
     const userId = req.user!.id;
 
-    // Get all active mining sessions for this user
+    // Get all active mining sessions for this user that have been active in the last 5 minutes
+    // This filters out stale sessions
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    
     const { data: sessions, error } = await supabase!
       .from('mining_sessions')
       .select('id, worker_name, started_at, total_hashes, accepted_shares, rejected_shares, avg_hashrate')
       .eq('user_id', userId)
       .is('ended_at', null)
+      .gte('started_at', fiveMinutesAgo)
       .order('started_at', { ascending: false });
 
     if (error) {
@@ -378,26 +414,32 @@ router.get('/my-instances', authMiddleware, async (req: AuthenticatedRequest, re
       return res.status(400).json({ error: error.message });
     }
 
-    // Calculate uptime and format data
-    const instances = (sessions || []).map(session => {
-      const startTime = new Date(session.started_at).getTime();
-      const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
-      const hours = Math.floor(uptimeSeconds / 3600);
-      const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-      const uptime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    // Calculate uptime and format data, filtering out sessions with invalid hashrate
+    const instances = (sessions || [])
+      .filter(session => {
+        const hashrate = parseFloat(session.avg_hashrate?.toString() || '0');
+        // Filter out sessions with invalid hashrate (0 or unreasonably high > 1 TH/s)
+        return hashrate > 0 && hashrate < 1000000000000;
+      })
+      .map(session => {
+        const startTime = new Date(session.started_at).getTime();
+        const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const hours = Math.floor(uptimeSeconds / 3600);
+        const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+        const uptime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
-      return {
-        id: session.id,
-        worker_name: session.worker_name,
-        started_at: session.started_at,
-        uptime,
-        uptime_seconds: uptimeSeconds,
-        total_hashes: session.total_hashes || 0,
-        accepted_shares: session.accepted_shares || 0,
-        rejected_shares: session.rejected_shares || 0,
-        avg_hashrate: parseFloat(session.avg_hashrate?.toString() || '0'),
-      };
-    });
+        return {
+          id: session.id,
+          worker_name: session.worker_name,
+          started_at: session.started_at,
+          uptime,
+          uptime_seconds: uptimeSeconds,
+          total_hashes: session.total_hashes || 0,
+          accepted_shares: session.accepted_shares || 0,
+          rejected_shares: session.rejected_shares || 0,
+          avg_hashrate: parseFloat(session.avg_hashrate?.toString() || '0'),
+        };
+      });
 
     res.json({
       instances,

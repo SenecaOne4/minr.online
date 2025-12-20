@@ -75,74 +75,119 @@ export default function MiningMetrics({
   const acceptanceRate = totalShares > 0 ? (sharesAccepted / totalShares) * 100 : 0;
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-slide-up">
       {/* Pool Metrics */}
-      <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-xl p-4 shadow-xl">
-        <h3 className="text-lg font-semibold text-white mb-3">Pool Statistics</h3>
-        {loading ? (
-          <div className="text-gray-400 text-sm">Loading...</div>
-        ) : poolStats ? (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-gray-400">Total Pool Hashrate</div>
-              <div className="text-lg font-bold text-white">{formatHashrate(poolStats.total_hashrate)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-400">Active Miners</div>
-              <div className="text-lg font-bold text-white">{poolStats.active_miners}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-400">Block Height</div>
-              <div className="text-lg font-bold text-white">{poolStats.block_height || 'N/A'}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-400">Network Difficulty</div>
-              <div className="text-lg font-bold text-white">{formatDifficulty(poolStats.network_difficulty)}</div>
-            </div>
-            {poolStats.pool_difficulty && (
-              <div>
-                <div className="text-xs text-gray-400">Pool Difficulty</div>
-                <div className="text-lg font-bold text-white">{formatDifficulty(poolStats.pool_difficulty)}</div>
-              </div>
-            )}
+      <div className="backdrop-blur-xl bg-gradient-to-br from-blue-500/20 via-purple-500/10 to-pink-500/20 border border-white/20 rounded-2xl p-6 shadow-2xl hover:shadow-blue-500/20 transition-all duration-300 hover:scale-[1.02] relative overflow-hidden">
+        {/* Animated background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/10 to-pink-600/10 animate-gradient opacity-50"></div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            <h3 className="text-xl font-bold text-white">Pool Statistics</h3>
           </div>
-        ) : (
-          <div className="text-gray-400 text-sm">No pool statistics available</div>
-        )}
+          {loading ? (
+            <div className="flex items-center gap-2 text-gray-400">
+              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin-slow"></div>
+              <span className="text-sm">Loading...</span>
+            </div>
+          ) : poolStats ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+                <div className="text-xs text-gray-400 mb-1">Total Pool Hashrate</div>
+                <div className="text-xl font-bold text-white bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                  {formatHashrate(poolStats.total_hashrate)}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+                <div className="text-xs text-gray-400 mb-1">Active Miners</div>
+                <div className="text-xl font-bold text-white">{poolStats.active_miners}</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+                <div className="text-xs text-gray-400 mb-1">Block Height</div>
+                <div className="text-xl font-bold text-white">{poolStats.block_height || 'N/A'}</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+                <div className="text-xs text-gray-400 mb-1">Network Difficulty</div>
+                <div className="text-xl font-bold text-white">{formatDifficulty(poolStats.network_difficulty)}</div>
+              </div>
+              {poolStats.pool_difficulty && (
+                <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all col-span-2">
+                  <div className="text-xs text-gray-400 mb-1">Pool Difficulty</div>
+                  <div className="text-xl font-bold text-white">{formatDifficulty(poolStats.pool_difficulty)}</div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-gray-400 text-sm">No pool statistics available</div>
+          )}
+        </div>
       </div>
 
       {/* User Performance Metrics */}
-      <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-xl p-4 shadow-xl">
-        <h3 className="text-lg font-semibold text-white mb-3">Your Performance</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs text-gray-400">Current Hashrate</div>
-            <div className="text-lg font-bold text-white">{formatHashrate(currentHashrate)}</div>
+      <div className="backdrop-blur-xl bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-teal-500/20 border border-white/20 rounded-2xl p-6 shadow-2xl hover:shadow-green-500/20 transition-all duration-300 hover:scale-[1.02] relative overflow-hidden">
+        {/* Animated background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-green-600/10 via-emerald-600/10 to-teal-600/10 animate-gradient opacity-50"></div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-4">
+            <div className={`w-2 h-2 rounded-full animate-pulse ${
+              connectionStatus === 'connected' ? 'bg-green-400' :
+              connectionStatus === 'connecting' ? 'bg-yellow-400' :
+              'bg-red-400'
+            }`}></div>
+            <h3 className="text-xl font-bold text-white">Your Performance</h3>
           </div>
-          <div>
-            <div className="text-xs text-gray-400">Shares Submitted</div>
-            <div className="text-lg font-bold text-white">{totalShares}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400">Accepted</div>
-            <div className="text-lg font-bold text-green-400">{sharesAccepted}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400">Rejected</div>
-            <div className="text-lg font-bold text-red-400">{sharesRejected}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400">Acceptance Rate</div>
-            <div className="text-lg font-bold text-white">{acceptanceRate.toFixed(1)}%</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400">Connection</div>
-            <div className={`text-lg font-bold ${
-              connectionStatus === 'connected' ? 'text-green-400' :
-              connectionStatus === 'connecting' ? 'text-yellow-400' :
-              'text-red-400'
-            }`}>
-              {connectionStatus.toUpperCase()}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+              <div className="text-xs text-gray-400 mb-1">Current Hashrate</div>
+              <div className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+                {formatHashrate(currentHashrate)}
+              </div>
+              {currentHashrate > 0 && (
+                <div className="mt-1 h-1 bg-green-500/30 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, (currentHashrate / 10000) * 100)}%` }}
+                  ></div>
+                </div>
+              )}
+            </div>
+            <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+              <div className="text-xs text-gray-400 mb-1">Shares Submitted</div>
+              <div className="text-xl font-bold text-white">{totalShares}</div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+              <div className="text-xs text-gray-400 mb-1">Accepted</div>
+              <div className="text-xl font-bold text-green-400 flex items-center gap-2">
+                <span>{sharesAccepted}</span>
+                {sharesAccepted > 0 && <span className="text-sm animate-pulse">✓</span>}
+              </div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+              <div className="text-xs text-gray-400 mb-1">Rejected</div>
+              <div className="text-xl font-bold text-red-400">{sharesRejected}</div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+              <div className="text-xs text-gray-400 mb-1">Acceptance Rate</div>
+              <div className="text-xl font-bold text-white">{acceptanceRate.toFixed(1)}%</div>
+              <div className="mt-1 h-1 bg-white/20 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-300"
+                  style={{ width: `${acceptanceRate}%` }}
+                ></div>
+              </div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+              <div className="text-xs text-gray-400 mb-1">Connection</div>
+              <div className={`text-xl font-bold flex items-center gap-2 ${
+                connectionStatus === 'connected' ? 'text-green-400' :
+                connectionStatus === 'connecting' ? 'text-yellow-400' :
+                'text-red-400'
+              }`}>
+                <span>{connectionStatus.toUpperCase()}</span>
+                {connectionStatus === 'connected' && (
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                )}
+              </div>
             </div>
           </div>
         </div>

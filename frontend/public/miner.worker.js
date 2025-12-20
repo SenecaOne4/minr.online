@@ -16,19 +16,30 @@ function rightRotate(value, amount) {
   return (value >>> amount) | (value << (32 - amount));
 }
 
+// Reusable buffers to avoid allocations in hot path
+let sha256PaddedBuffer = null;
+let sha256WBuffer = null;
+let sha256HashBuffer = null;
+
 function sha256(message) {
   const msgLength = message.length;
   const msgBitLength = msgLength * 8;
   
-  // Pre-processing
-  let padded = new Uint8Array(((msgLength + 9 + 63) & ~63));
+  // Pre-processing - calculate padded length once
+  const paddedLength = ((msgLength + 9 + 63) & ~63);
+  
+  // Reuse buffer if possible, otherwise allocate
+  if (!sha256PaddedBuffer || sha256PaddedBuffer.length < paddedLength) {
+    sha256PaddedBuffer = new Uint8Array(paddedLength);
+  }
+  const padded = sha256PaddedBuffer.subarray(0, paddedLength);
   padded.set(message);
   padded[msgLength] = 0x80;
   
-  // Append length (big-endian)
-  const view = new DataView(padded.buffer);
-  view.setUint32(padded.length - 8, Math.floor(msgBitLength / 0x100000000), false);
-  view.setUint32(padded.length - 4, msgBitLength & 0xffffffff, false);
+  // Append length (big-endian) - use DataView for efficiency
+  const view = new DataView(padded.buffer, padded.byteOffset, paddedLength);
+  view.setUint32(paddedLength - 8, Math.floor(msgBitLength / 0x100000000), false);
+  view.setUint32(paddedLength - 4, msgBitLength & 0xffffffff, false);
   
   // Initialize hash values
   let h0 = 0x6a09e667;
@@ -40,31 +51,50 @@ function sha256(message) {
   let h6 = 0x1f83d9ab;
   let h7 = 0x5be0cd19;
   
+  // Reuse w buffer
+  if (!sha256WBuffer) {
+    sha256WBuffer = new Uint32Array(64);
+  }
+  const w = sha256WBuffer;
+  
   // Process message in 512-bit chunks
-  for (let chunkStart = 0; chunkStart < padded.length; chunkStart += 64) {
-    const w = new Uint32Array(64);
-    
-    // Copy chunk into first 16 words
+  for (let chunkStart = 0; chunkStart < paddedLength; chunkStart += 64) {
+    // Copy chunk into first 16 words (optimized - use bit shift for multiplication)
     for (let i = 0; i < 16; i++) {
-      w[i] = view.getUint32(chunkStart + i * 4, false);
+      w[i] = view.getUint32(chunkStart + (i << 2), false);
     }
     
     // Extend the first 16 words into the remaining 48 words
     for (let i = 16; i < 64; i++) {
-      const s0 = rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >>> 3);
-      const s1 = rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      const w15 = w[i - 15];
+      const w2 = w[i - 2];
+      // Optimize: cache rightRotate results
+      const r15_7 = rightRotate(w15, 7);
+      const r15_18 = rightRotate(w15, 18);
+      const r2_17 = rightRotate(w2, 17);
+      const r2_19 = rightRotate(w2, 19);
+      const s0 = r15_7 ^ r15_18 ^ (w15 >>> 3);
+      const s1 = r2_17 ^ r2_19 ^ (w2 >>> 10);
       w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
     }
     
     // Initialize working variables
     let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
     
-    // Main loop
+    // Main loop - optimized with inlined operations
     for (let i = 0; i < 64; i++) {
-      const S1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
+      // Cache rightRotate results
+      const re_6 = rightRotate(e, 6);
+      const re_11 = rightRotate(e, 11);
+      const re_25 = rightRotate(e, 25);
+      const S1 = re_6 ^ re_11 ^ re_25;
       const ch = (e & f) ^ (~e & g);
       const temp1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
-      const S0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
+      
+      const ra_2 = rightRotate(a, 2);
+      const ra_13 = rightRotate(a, 13);
+      const ra_22 = rightRotate(a, 22);
+      const S0 = ra_2 ^ ra_13 ^ ra_22;
       const maj = (a & b) ^ (a & c) ^ (b & c);
       const temp2 = (S0 + maj) >>> 0;
       
@@ -89,8 +119,11 @@ function sha256(message) {
     h7 = (h7 + h) >>> 0;
   }
   
-  // Produce final hash value
-  const hash = new Uint8Array(32);
+  // Reuse hash buffer
+  if (!sha256HashBuffer) {
+    sha256HashBuffer = new Uint8Array(32);
+  }
+  const hash = sha256HashBuffer;
   const hashView = new DataView(hash.buffer);
   hashView.setUint32(0, h0, false);
   hashView.setUint32(4, h1, false);
@@ -101,7 +134,8 @@ function sha256(message) {
   hashView.setUint32(24, h6, false);
   hashView.setUint32(28, h7, false);
   
-  return hash;
+  // Return a copy to avoid buffer reuse issues
+  return new Uint8Array(hash);
 }
 
 function doubleSha256(input) {
@@ -109,10 +143,12 @@ function doubleSha256(input) {
   const firstHash = sha256(encoder.encode(input));
   const secondHash = sha256(firstHash);
   
-  // Convert to hex string
-  return Array.from(secondHash)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  // Convert to hex string (optimized - avoid Array.from)
+  let hex = '';
+  for (let i = 0; i < secondHash.length; i++) {
+    hex += (secondHash[i] < 16 ? '0' : '') + secondHash[i].toString(16);
+  }
+  return hex;
 }
 
 // Helper: Reverse byte order (little-endian to big-endian for hex strings)
@@ -218,7 +254,7 @@ let nonceStride = 1;
 let nonceCounter = 0;
 let hashesCompleted = 0;
 let lastReportTime = performance.now();
-let batchSize = 50000; // 50k nonces per batch
+let batchSize = 500000; // 500k nonces per batch (increased for better performance - larger batches = less overhead)
 
 // Cache for merkle root per extranonce2 (performance optimization)
 let cachedExtranonce2 = null;
@@ -248,63 +284,87 @@ function mineBatch() {
   headerPrefix.set(ntimeBytes, 68);
   headerPrefix.set(nbitsBytes, 72);
   
-  // Process batch with optimized loop
-  for (let i = 0; i < batchSize; i++) {
-    // Use stride: nonce = start + (counter * stride) mod 2^32
-    const nonce = (nonceStart + (nonceCounter * nonceStride)) & 0xffffffff;
-    nonceCounter++;
+  // Pre-compute merkle root once per extranonce2
+  if (cachedExtranonce2 !== extranonce2Counter || !cachedMerkleRootBytes) {
+    const extranonce2Hex = extranonce2Counter.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
+    const coinbaseHex = currentJob.coinb1 + extraNonce.extranonce1 + extranonce2Hex + currentJob.coinb2;
+    const coinbaseBytes = hexToBytes(coinbaseHex);
+    const coinbaseHashBytes = sha256(sha256(coinbaseBytes));
+    const coinbaseHashHex = bytesToHex(coinbaseHashBytes);
+    cachedMerkleRootBytes = hexToBytes(buildMerkleRoot(coinbaseHashHex, currentJob.merkleBranches || []));
+    cachedExtranonce2 = extranonce2Counter;
+  }
+  
+  // Pre-assemble header with merkle root (only nonce will change)
+  const headerBase = new Uint8Array(80);
+  headerBase.set(headerPrefix, 0);
+  headerBase.set(cachedMerkleRootBytes, 36);
+  
+  // Reusable DataView for nonce updates
+  const headerView = new DataView(headerBase.buffer);
+  
+  // Process batch with optimized loop - tighter loop, fewer allocations
+  const targetHex = currentJob.target;
+  let foundShare = null;
+  
+  // Pre-compute extranonce2 hex string length
+  const extranonce2HexLength = extraNonce.extranonce2Size * 2;
+  
+  // Process in chunks to allow for extranonce2 updates
+  let processedInBatch = 0;
+  const maxNoncesBeforeExtranonce2Update = 200000;
+  
+  while (processedInBatch < batchSize && isRunning) {
+    // Determine how many nonces to process in this chunk
+    const remainingInBatch = batchSize - processedInBatch;
+    const remainingUntilExtranonce2Update = maxNoncesBeforeExtranonce2Update - (nonceCounter % maxNoncesBeforeExtranonce2Update);
+    const chunkSize = Math.min(remainingInBatch, remainingUntilExtranonce2Update);
     
-    try {
-      // Check if we need to recompute merkle root (extranonce2 changed)
-      if (cachedExtranonce2 !== extranonce2Counter) {
-        // Recompute coinbase and merkle root for this extranonce2
-        const extranonce2Hex = extranonce2Counter.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
-        const coinbaseHex = currentJob.coinb1 + extraNonce.extranonce1 + extranonce2Hex + currentJob.coinb2;
-        const coinbaseBytes = hexToBytes(coinbaseHex);
-        const coinbaseHashBytes = sha256(sha256(coinbaseBytes));
-        const coinbaseHashHex = bytesToHex(coinbaseHashBytes);
-        cachedMerkleRootBytes = hexToBytes(buildMerkleRoot(coinbaseHashHex, currentJob.merkleBranches || []));
-        cachedExtranonce2 = extranonce2Counter;
-      }
+    // Tight inner loop - minimize allocations
+    for (let i = 0; i < chunkSize; i++) {
+      // Use stride: nonce = start + (counter * stride) mod 2^32
+      const nonce = (nonceStart + (nonceCounter * nonceStride)) & 0xffffffff;
+      nonceCounter++;
       
-      // Assemble full header (only nonce changes)
-      const headerBytes = new Uint8Array(80);
-      headerBytes.set(headerPrefix, 0);
-      headerBytes.set(cachedMerkleRootBytes, 36); // merkle root at bytes 36-67
-      const nonceView = new DataView(headerBytes.buffer);
-      nonceView.setUint32(76, nonce, true); // nonce at bytes 76-79 (little-endian)
+      // Update nonce in header (little-endian) - reuse same buffer
+      headerView.setUint32(76, nonce, true);
       
       // Hash block header (double SHA256)
-      const headerHashBytes = sha256(sha256(headerBytes));
+      const headerHashBytes = sha256(sha256(headerBase));
       hashesCompleted++;
       
-      // Check against target
-      if (hashMeetsTarget(headerHashBytes, currentJob.target)) {
+      // Check against target (optimized comparison)
+      if (hashMeetsTarget(headerHashBytes, targetHex)) {
         // Share found!
         const headerHashHex = bytesToHex(headerHashBytes);
-        const extranonce2Hex = cachedExtranonce2.toString(16).padStart(extraNonce.extranonce2Size * 2, '0');
-        self.postMessage({
-          type: 'shareFound',
-          share: {
-            jobId: currentJob.jobId,
-            extranonce2: extranonce2Hex,
-            ntime: currentJob.nTime,
-            nonce: nonce.toString(16).padStart(8, '0'),
-            headerHash: reverseHex(headerHashHex),
-          },
-        });
-        // Don't break - continue mining for more shares
+        const extranonce2Hex = cachedExtranonce2.toString(16).padStart(extranonce2HexLength, '0');
+        foundShare = {
+          jobId: currentJob.jobId,
+          extranonce2: extranonce2Hex,
+          ntime: currentJob.nTime,
+          nonce: nonce.toString(16).padStart(8, '0'),
+          headerHash: reverseHex(headerHashHex),
+        };
+        // Continue mining - don't break
       }
-      
-      // Increment extranonce2 periodically (every 100k nonces)
-      if (nonceCounter > 0 && nonceCounter % 100000 === 0) {
-        extranonce2Counter++;
-        cachedExtranonce2 = null; // Force recompute on next iteration
-      }
-    } catch (error) {
-      console.error('Mining error:', error);
-      hashesCompleted++;
     }
+    
+    processedInBatch += chunkSize;
+    
+    // Increment extranonce2 periodically (every 200k nonces to reduce recomputation)
+    if (nonceCounter > 0 && nonceCounter % maxNoncesBeforeExtranonce2Update === 0) {
+      extranonce2Counter++;
+      cachedExtranonce2 = null; // Force recompute on next batch
+      break; // Exit loop to recompute merkle root
+    }
+  }
+  
+  // Send share if found
+  if (foundShare) {
+    self.postMessage({
+      type: 'shareFound',
+      share: foundShare,
+    });
   }
   
   const now = performance.now();
@@ -325,9 +385,14 @@ function mineBatch() {
     lastReportTime = now;
   }
   
-  // Continue mining
+  // Continue mining with optimized scheduling
   if (isRunning) {
-    setTimeout(mineBatch, 0);
+    // Use requestIdleCallback if available, otherwise setTimeout with minimal delay
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(mineBatch, { timeout: 1 });
+    } else {
+      setTimeout(mineBatch, 0);
+    }
   }
 }
 

@@ -153,7 +153,12 @@ export default function AnalyticsDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-xl p-4 shadow-xl">
           <div className="text-sm text-gray-400 mb-1">Total Hashrate</div>
-          <div className="text-2xl font-bold text-white">{formatHashrate(stats.total_hashrate)}</div>
+          <div className="text-2xl font-bold text-white">
+            {stats.total_hashrate > 0 ? formatHashrate(stats.total_hashrate) : '0 H/s'}
+          </div>
+          {stats.total_hashrate === 0 && stats.active_sessions === 0 && (
+            <div className="text-xs text-gray-500 mt-1">No active miners</div>
+          )}
         </div>
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-xl p-4 shadow-xl">
           <div className="text-sm text-gray-400 mb-1">Accepted Shares</div>
@@ -178,26 +183,65 @@ export default function AnalyticsDashboard() {
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-xl p-4 shadow-xl">
           <div className="text-sm text-gray-400 mb-1">Active Sessions</div>
           <div className="text-2xl font-bold text-white">{stats.active_sessions}</div>
-          {stats.active_sessions > 0 && (
-            <div className="text-xs text-green-400 mt-1">Mining in progress</div>
+          {stats.active_sessions > 0 ? (
+            <div className="text-xs text-green-400 mt-1 flex items-center gap-1">
+              <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+              <span>Mining in progress</span>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500 mt-1">No active miners</div>
           )}
         </div>
       </div>
 
       {/* Charts */}
-      {chartData.length > 0 && (
+      {chartData.length > 0 ? (
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-xl p-6 shadow-2xl">
           <h3 className="text-xl font-bold text-white mb-4">Hashrate Over Time</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-              <XAxis dataKey="date" stroke="#ffffff80" />
-              <YAxis stroke="#ffffff80" />
-              <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #ffffff20' }} />
+              <XAxis 
+                dataKey="date" 
+                stroke="#ffffff80"
+                tickFormatter={(value) => {
+                  // Format date as MM/DD
+                  const date = new Date(value);
+                  return `${date.getMonth() + 1}/${date.getDate()}`;
+                }}
+              />
+              <YAxis 
+                stroke="#ffffff80"
+                tickFormatter={(value) => {
+                  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+                  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+                  return value.toString();
+                }}
+              />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #ffffff20' }}
+                formatter={(value: any) => formatHashrate(value)}
+                labelFormatter={(label) => `Date: ${label}`}
+              />
               <Legend />
-              <Line type="monotone" dataKey="hashrate" stroke="#3b82f6" strokeWidth={2} />
+              <Line 
+                type="monotone" 
+                dataKey="hashrate" 
+                stroke="#3b82f6" 
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 6 }}
+              />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-xl p-6 shadow-2xl">
+          <h3 className="text-xl font-bold text-white mb-4">Hashrate Over Time</h3>
+          <div className="text-center text-gray-400 py-12">
+            <p>No active mining data available for the selected period.</p>
+            <p className="text-sm mt-2">Start mining to see your hashrate chart here.</p>
+          </div>
         </div>
       )}
     </div>

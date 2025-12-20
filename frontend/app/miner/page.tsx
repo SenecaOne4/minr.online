@@ -692,14 +692,23 @@ export default function MinerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 text-white relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-float"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
+      </div>
+      
       <Navbar userEmail={user?.email} />
-      <div className="max-w-7xl mx-auto p-4">
+      <div className="max-w-7xl mx-auto p-4 relative z-10">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2 text-white">Minr.online</h1>
-          <p className="text-gray-300 text-lg">Bitcoin Lottery Pool Mining Platform</p>
-          <p className="text-gray-400 text-sm mt-2">Like a lottery - if someone solves a block, we split the BTC payout</p>
+        <div className="mb-8 animate-slide-up">
+          <h1 className="text-5xl md:text-6xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Browser Miner
+          </h1>
+          <p className="text-gray-300 text-xl mb-2">Bitcoin Lottery Pool Mining Platform</p>
+          <p className="text-gray-400 text-sm">Like a lottery - if someone solves a block, we split the BTC payout</p>
         </div>
 
         {/* Mining Metrics */}
@@ -715,8 +724,19 @@ export default function MinerPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Card */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
-              <h2 className="text-2xl font-semibold mb-4 text-white">Mining Dashboard</h2>
+            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl hover:shadow-blue-500/20 transition-all duration-300 relative overflow-hidden animate-slide-up">
+              {/* Animated background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/10 to-pink-600/10 animate-gradient opacity-50"></div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className={`w-3 h-3 rounded-full ${
+                    workerState === 'running' ? 'bg-green-400 animate-pulse' :
+                    workerState === 'starting' ? 'bg-yellow-400 animate-pulse' :
+                    workerState === 'error' ? 'bg-red-400 animate-pulse' :
+                    'bg-gray-400'
+                  }`}></div>
+                  <h2 className="text-3xl font-bold text-white">Mining Dashboard</h2>
+                </div>
 
               <div className="space-y-4">
                 <div>
@@ -724,20 +744,28 @@ export default function MinerPage() {
                   <p className="font-mono text-sm break-all">{adminWallet || 'Loading...'}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm text-gray-400">Hashrate</label>
-                    <p className="text-2xl font-bold">
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+                    <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Hashrate</label>
+                    <p className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
                       {hashesPerSecond >= 1000000 
                         ? `${(hashesPerSecond / 1000000).toFixed(2)} MH/s`
                         : hashesPerSecond >= 1000
                         ? `${(hashesPerSecond / 1000).toFixed(2)} kH/s`
                         : `${hashesPerSecond.toLocaleString()} H/s`}
                     </p>
+                    {hashesPerSecond > 0 && (
+                      <div className="mt-2 h-1.5 bg-green-500/20 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, (hashesPerSecond / 10000) * 100)}%` }}
+                        ></div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="text-sm text-gray-400">Total Hashes</label>
-                    <p className="text-2xl font-bold">
+                  <div className="bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all">
+                    <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Total Hashes</label>
+                    <p className="text-3xl font-bold text-white">
                       {totalHashes >= 1000000000
                         ? `${(totalHashes / 1000000000).toFixed(2)}B`
                         : totalHashes >= 1000000
@@ -749,30 +777,42 @@ export default function MinerPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-sm text-gray-400">Worker State</label>
-                  <p className={`font-semibold ${
-                    workerState === 'running' ? 'text-green-600' :
-                    workerState === 'starting' ? 'text-yellow-600' :
-                    workerState === 'error' ? 'text-red-600' :
-                    'text-gray-600'
-                  }`}>
-                    {workerState.toUpperCase()}
-                  </p>
+                <div className="bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-white/10 mb-6">
+                  <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Worker State</label>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${
+                      workerState === 'running' ? 'bg-green-400 animate-pulse' :
+                      workerState === 'starting' ? 'bg-yellow-400 animate-pulse' :
+                      workerState === 'error' ? 'bg-red-400 animate-pulse' :
+                      'bg-gray-400'
+                    }`}></div>
+                    <p className={`text-xl font-bold ${
+                      workerState === 'running' ? 'text-green-400' :
+                      workerState === 'starting' ? 'text-yellow-400' :
+                      workerState === 'error' ? 'text-red-400' :
+                      'text-gray-400'
+                    }`}>
+                      {workerState.toUpperCase()}
+                    </p>
+                  </div>
                   {workerError && (
-                    <p className="text-xs text-red-400 mt-1">Error: {workerError}</p>
+                    <p className="text-sm text-red-400 mt-2 flex items-center gap-2">
+                      <span>⚠️</span>
+                      <span>Error: {workerError}</span>
+                    </p>
                   )}
                 </div>
 
                 {difficulty && difficulty >= 1000 && (
-                  <div className="bg-red-900/30 border border-red-600 rounded p-3">
-                    <p className="text-red-400 font-semibold">
-                      ⚠️ High Difficulty Warning
+                  <div className="bg-red-900/30 border border-red-500/50 rounded-xl p-4 backdrop-blur-sm animate-slide-up">
+                    <p className="text-red-400 font-semibold flex items-center gap-2 text-lg">
+                      <span>⚠️</span>
+                      <span>High Difficulty Warning</span>
                     </p>
-                    <p className="text-xs text-red-300 mt-1">
-                      Current difficulty: {difficulty}. Browsers may not find shares at this difficulty.
+                    <p className="text-sm text-red-300 mt-2">
+                      Current difficulty: <span className="font-bold">{difficulty}</span>. Browsers may not find shares at this difficulty.
                       {miningStartTime && realShares === 0 && (Date.now() - miningStartTime) / 1000 >= 60 && (
-                        <span className="block mt-1 font-semibold">
+                        <span className="block mt-2 font-semibold">
                           No shares after 60s. Use a pool with lower difficulty or run our own stratum coordinator.
                         </span>
                       )}
@@ -781,12 +821,13 @@ export default function MinerPage() {
                 )}
 
                 {realShares > 0 && (
-                  <div className="bg-green-900/30 border border-green-600 rounded p-3">
-                    <p className="text-green-400">
-                      ✅ Shares Submitted: <span className="font-bold">{realShares}</span>
+                  <div className="bg-green-900/30 border border-green-500/50 rounded-xl p-4 backdrop-blur-sm animate-slide-up">
+                    <p className="text-green-400 flex items-center gap-2 text-lg">
+                      <span className="text-2xl animate-pulse">✅</span>
+                      <span>Shares Submitted: <span className="font-bold text-xl">{realShares}</span></span>
                     </p>
                     {lastSubmitResult && (
-                      <p className="text-xs text-green-300 mt-1">
+                      <p className="text-sm text-green-300 mt-2">
                         Last result: {lastSubmitResult}
                       </p>
                     )}
@@ -850,16 +891,16 @@ export default function MinerPage() {
                   )}
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={workerState === 'running' ? stopMining : startMining}
                       disabled={workerState === 'error' || workerState === 'starting'}
-                      className={`px-6 py-3 rounded-xl font-semibold text-lg transition-all duration-200 shadow-xl hover:shadow-2xl ${
+                      className={`px-8 py-4 rounded-xl font-bold text-lg transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-95 ${
                         workerState === 'running'
-                          ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white'
-                          : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white'
-                      } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg`}
+                          ? 'bg-gradient-to-r from-red-600 via-red-500 to-red-700 hover:from-red-700 hover:via-red-600 hover:to-red-800 text-white animate-pulse-glow'
+                          : 'bg-gradient-to-r from-green-600 via-emerald-500 to-green-700 hover:from-green-700 hover:via-emerald-600 hover:to-green-800 text-white'
+                      } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg disabled:transform-none`}
                       title={
                         workerState === 'running' ? 'Stop mining' :
                         (!currentJob || !extraNonce || connectionStatus !== 'connected')
@@ -867,56 +908,102 @@ export default function MinerPage() {
                           : 'Start mining (will submit shares to pool)'
                       }
                     >
-                      {workerState === 'running' ? '⏹ Stop Mining' : '▶ Start Mining'}
-                      {workerState === 'stopped' && (
-                        <span className="ml-2 text-xs block mt-1 opacity-75">
-                          {connectionStatus === 'connected' && extraNonce && currentJob
-                            ? 'Ready to mine'
-                            : 'Needs connection'}
-                        </span>
-                      )}
+                      <span className="flex items-center gap-2">
+                        {workerState === 'running' ? (
+                          <>
+                            <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                            <span>⏹ Stop Mining</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>▶</span>
+                            <span>Start Mining</span>
+                          </>
+                        )}
+                      </span>
                     </button>
 
                     {connectionStatus === 'disconnected' || connectionStatus === 'error' ? (
                       <button
                         onClick={connectWebSocket}
-                        className="px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white transition-all duration-200 shadow-xl hover:shadow-2xl"
+                        className="px-6 py-4 rounded-xl font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-700 hover:from-blue-700 hover:via-blue-600 hover:to-blue-800 text-white transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-95"
                       >
-                        🔌 Connect Pool
+                        <span className="flex items-center gap-2">
+                          <span>🔌</span>
+                          <span>Connect Pool</span>
+                        </span>
                       </button>
                     ) : (
                       <button
                         onClick={disconnectWebSocket}
-                        className="px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white transition-all duration-200 shadow-xl hover:shadow-2xl"
+                        className="px-6 py-4 rounded-xl font-semibold bg-gradient-to-r from-red-600 via-red-500 to-red-700 hover:from-red-700 hover:via-red-600 hover:to-red-800 text-white transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-95"
                       >
-                        🔌 Disconnect Pool
+                        <span className="flex items-center gap-2">
+                          <span>🔌</span>
+                          <span>Disconnect Pool</span>
+                        </span>
                       </button>
                     )}
                   </div>
                   
                   {workerState === 'stopped' && (
-                    <div className="text-xs text-gray-400 mt-2">
-                      {connectionStatus !== 'connected' && '⚠️ Connect to pool first'}
-                      {connectionStatus === 'connected' && !extraNonce && '⚠️ Waiting for subscription...'}
-                      {connectionStatus === 'connected' && extraNonce && !currentJob && '⚠️ Waiting for job from pool...'}
-                      {connectionStatus === 'connected' && extraNonce && currentJob && '✅ Ready to mine'}
+                    <div className="bg-white/5 rounded-lg p-3 backdrop-blur-sm border border-white/10">
+                      <div className="flex items-center gap-2 text-sm">
+                        {connectionStatus !== 'connected' && (
+                          <>
+                            <span className="text-yellow-400">⚠️</span>
+                            <span className="text-gray-300">Connect to pool first</span>
+                          </>
+                        )}
+                        {connectionStatus === 'connected' && !extraNonce && (
+                          <>
+                            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                            <span className="text-gray-300">Waiting for subscription...</span>
+                          </>
+                        )}
+                        {connectionStatus === 'connected' && extraNonce && !currentJob && (
+                          <>
+                            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                            <span className="text-gray-300">Waiting for job from pool...</span>
+                          </>
+                        )}
+                        {connectionStatus === 'connected' && extraNonce && currentJob && (
+                          <>
+                            <span className="text-green-400">✅</span>
+                            <span className="text-gray-300">Ready to mine</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <div>
-                  <label className="text-sm text-gray-400">Connection Status</label>
-                  <p className={`font-semibold ${getStatusColor(connectionStatus)}`}>
-                    {connectionStatus.toUpperCase()}
-                  </p>
+                <div className="bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-white/10">
+                  <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Connection Status</label>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${
+                      connectionStatus === 'connected' ? 'bg-green-400 animate-pulse' :
+                      connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
+                      connectionStatus === 'error' ? 'bg-red-400 animate-pulse' :
+                      'bg-gray-400'
+                    }`}></div>
+                    <p className={`text-xl font-bold ${getStatusColor(connectionStatus)}`}>
+                      {connectionStatus.toUpperCase()}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* ExtraNonce Panel */}
             {extraNonce && (
-              <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
-                <h2 className="text-2xl font-semibold mb-4 text-white">ExtraNonce</h2>
+              <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-purple-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 relative overflow-hidden animate-slide-up">
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 via-pink-600/10 to-purple-600/10 animate-gradient opacity-50"></div>
+                <div className="relative z-10">
+                  <h2 className="text-2xl font-bold mb-4 text-white flex items-center gap-2">
+                    <span>🔑</span>
+                    <span>ExtraNonce</span>
+                  </h2>
                 <div className="space-y-3 font-mono text-sm">
                   <div>
                     <label className="text-gray-400">extranonce1:</label>
@@ -932,8 +1019,13 @@ export default function MinerPage() {
 
             {/* Current Job Panel */}
             {currentJob && (
-              <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-white/5 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl">
-                <h2 className="text-2xl font-semibold mb-4 text-white">Current Job</h2>
+              <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-blue-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl hover:shadow-blue-500/20 transition-all duration-300 relative overflow-hidden animate-slide-up">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-cyan-600/10 to-blue-600/10 animate-gradient opacity-50"></div>
+                <div className="relative z-10">
+                  <h2 className="text-2xl font-bold mb-4 text-white flex items-center gap-2">
+                    <span>⚡</span>
+                    <span>Current Job</span>
+                  </h2>
                 <div className="space-y-3 font-mono text-sm">
                   <div>
                     <label className="text-gray-400">Job ID:</label>
@@ -990,26 +1082,32 @@ export default function MinerPage() {
 
           {/* Stratum Log */}
           <div className="lg:col-span-1">
-            <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl p-6 shadow-2xl h-[600px] flex flex-col">
-              <h2 className="text-2xl font-semibold mb-4 text-white">Stratum Log</h2>
-              <div ref={logContainerRef} className="flex-1 overflow-y-auto font-mono text-xs space-y-1">
-                {logs.length === 0 ? (
-                  <p className="text-gray-500">No messages yet...</p>
-                ) : (
-                  logs.map((log) => (
-                    <div key={log.id} className="flex gap-2">
-                      <span className="text-gray-500">{log.timestamp}</span>
-                      <span className={getLogColor(log.type)}>{log.message}</span>
-                    </div>
-                  ))
-                )}
+            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 via-gray-500/10 to-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl h-[600px] flex flex-col relative overflow-hidden animate-slide-up">
+              <div className="absolute inset-0 bg-gradient-to-br from-gray-600/10 via-slate-600/10 to-gray-600/10 animate-gradient opacity-50"></div>
+              <div className="relative z-10 flex flex-col h-full">
+                <h2 className="text-2xl font-bold mb-4 text-white flex items-center gap-2">
+                  <span>📋</span>
+                  <span>Stratum Log</span>
+                </h2>
+                <div ref={logContainerRef} className="flex-1 overflow-y-auto font-mono text-xs space-y-1 bg-black/20 rounded-lg p-3 backdrop-blur-sm">
+                  {logs.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">No messages yet...</p>
+                  ) : (
+                    logs.map((log) => (
+                      <div key={log.id} className="flex gap-2 py-1 hover:bg-white/5 rounded px-2 transition-colors">
+                        <span className="text-gray-500 flex-shrink-0">{log.timestamp}</span>
+                        <span className={getLogColor(log.type)}>{log.message}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <button
+                  onClick={() => setLogs([])}
+                  className="mt-4 px-4 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-all duration-200 backdrop-blur-sm hover:scale-105 active:scale-95 font-semibold"
+                >
+                  Clear Log
+                </button>
               </div>
-              <button
-                onClick={() => setLogs([])}
-                className="mt-4 px-3 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-colors backdrop-blur-sm"
-              >
-                Clear Log
-              </button>
             </div>
           </div>
         </div>

@@ -405,11 +405,14 @@ router.get('/mining-instances', async (req: AuthenticatedRequest, res: Response)
       return res.status(503).json({ error: 'Supabase not configured' });
     }
 
-    // Get all active mining sessions
+    // Get all ACTIVE mining sessions (active in the last 5 minutes)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    
     const { data: sessions, error } = await supabase!
       .from('mining_sessions')
       .select('id, user_id, worker_name, started_at, total_hashes, accepted_shares, rejected_shares, avg_hashrate')
       .is('ended_at', null)
+      .gte('started_at', fiveMinutesAgo)
       .order('started_at', { ascending: false });
 
     if (error) {
@@ -444,10 +447,16 @@ router.get('/mining-instances', async (req: AuthenticatedRequest, res: Response)
       }
     }
 
-    // Group by user_id
+    // Group by user_id, filtering invalid hashrate values
     const userGroups: Record<string, any> = {};
     
     for (const session of sessions || []) {
+      const hashrate = parseFloat(session.avg_hashrate?.toString() || '0');
+      // Skip sessions with invalid hashrate
+      if (hashrate <= 0 || hashrate >= 1000000000000) {
+        continue;
+      }
+      
       const userId = session.user_id;
       if (!userGroups[userId]) {
         const userInfo = userInfoMap[userId] || { email: 'Unknown', username: null };
@@ -475,11 +484,11 @@ router.get('/mining-instances', async (req: AuthenticatedRequest, res: Response)
         total_hashes: session.total_hashes || 0,
         accepted_shares: session.accepted_shares || 0,
         rejected_shares: session.rejected_shares || 0,
-        avg_hashrate: parseFloat(session.avg_hashrate?.toString() || '0'),
+        avg_hashrate: hashrate,
       };
 
       userGroups[userId].instances.push(instance);
-      userGroups[userId].total_hashrate += instance.avg_hashrate;
+      userGroups[userId].total_hashrate += hashrate;
     }
 
     // Convert to array and sort by total hashrate (descending)

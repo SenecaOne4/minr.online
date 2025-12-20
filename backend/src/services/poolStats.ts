@@ -44,25 +44,33 @@ async function aggregatePoolStats(): Promise<void> {
   }
 
   try {
-    // Get all active mining sessions (not ended)
+    // Get all active mining sessions (not ended) that have been active in the last 5 minutes
+    // This filters out stale sessions that weren't properly closed
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    
     const { data: activeSessions, error: sessionsError } = await supabase
       .from('mining_sessions')
       .select('*')
-      .is('ended_at', null);
+      .is('ended_at', null)
+      .gte('started_at', fiveMinutesAgo);
 
     if (sessionsError) {
       console.error('[poolStats] Error fetching active sessions:', sessionsError);
       return;
     }
 
-    // Calculate total pool hashrate
+    // Calculate total pool hashrate from truly active sessions
     let totalHashrate = 0;
     const activeMiners = new Set<string>();
 
     if (activeSessions) {
       for (const session of activeSessions) {
-        totalHashrate += parseFloat(session.avg_hashrate?.toString() || '0');
-        activeMiners.add(session.user_id);
+        const sessionHashrate = parseFloat(session.avg_hashrate?.toString() || '0');
+        // Only count sessions with reasonable hashrate (> 0 and < 1 TH/s to filter out bad data)
+        if (sessionHashrate > 0 && sessionHashrate < 1000000000000) {
+          totalHashrate += sessionHashrate;
+          activeMiners.add(session.user_id);
+        }
       }
     }
 
@@ -87,8 +95,15 @@ async function aggregatePoolStats(): Promise<void> {
     if (statsError) {
       console.error('[poolStats] Error updating statistics:', statsError);
     } else {
+      // Format hashrate for logging
+      const formattedHashrate = totalHashrate >= 1000000 
+        ? `${(totalHashrate / 1000000).toFixed(2)} MH/s`
+        : totalHashrate >= 1000
+        ? `${(totalHashrate / 1000).toFixed(2)} kH/s`
+        : `${totalHashrate.toFixed(2)} H/s`;
+      
       console.log(
-        `[poolStats] Updated: ${totalHashrate.toFixed(2)} H/s, ${activeMiners.size} miners, block ${blockHeight}`
+        `[poolStats] Updated: ${formattedHashrate}, ${activeMiners.size} miners, block ${blockHeight}`
       );
     }
   } catch (error: any) {
