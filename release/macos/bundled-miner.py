@@ -14,19 +14,19 @@ import multiprocessing
 # Force native mode - no fallback
 USE_NATIVE = True
 
-# Import miner script (will be bundled as data)
-# We'll import it dynamically by adding the build dir to path
+# Miner script path (will be bundled as data)
 if getattr(sys, 'frozen', False):
     # PyInstaller bundle - miner script is in _MEIPASS
     bundle_dir = sys._MEIPASS
-    sys.path.insert(0, bundle_dir)
-    # Import as if it's a module (PyInstaller will include it)
-    import minr_stratum_miner as miner_module
+    miner_script_path = os.path.join(bundle_dir, 'minr-stratum-miner.py')
 else:
-    # Development mode - add project root to path
+    # Development mode
     project_root = os.path.join(os.path.dirname(__file__), '../..')
-    sys.path.insert(0, project_root)
-    from miner_scripts import minr_stratum_miner as miner_module
+    miner_script_path = os.path.join(project_root, 'miner-scripts', 'minr-stratum-miner.py')
+
+if not os.path.exists(miner_script_path):
+    print(f"ERROR: Miner script not found: {miner_script_path}")
+    sys.exit(1)
 
 # Get config from environment or API
 def fetch_config():
@@ -160,34 +160,55 @@ def main():
     config = fetch_config()
     
     # Set environment variables for miner script
-    os.environ['BTC_WALLET'] = config['wallet']
-    os.environ['WORKER_NAME'] = config['worker']
-    os.environ['STRATUM_HOST'] = config['host']
+    os.environ['BTC_WALLET'] = config['wallet'] or ''
+    os.environ['WORKER_NAME'] = config['worker'] or ''
+    os.environ['STRATUM_HOST'] = config['host'] or ''
     os.environ['STRATUM_PORT'] = str(config['port'])
-    os.environ['USER_EMAIL'] = config.get('email', '')
-    
-    # Set USE_NATIVE in miner module
-    miner_module.USE_NATIVE = True
-    
-    # Override config in miner module
-    miner_module.BTC_WALLET = config['wallet']
-    miner_module.WORKER_NAME = config['worker']
-    miner_module.STRATUM_HOST = config['host']
-    miner_module.STRATUM_PORT = config['port']
-    miner_module.USER_EMAIL = config.get('email', '')
+    if config.get('email'):
+        os.environ['USER_EMAIL'] = config['email']
     
     # Determine thread count
     num_threads = config['threads']
     if num_threads == 0:
         num_threads = min(multiprocessing.cpu_count(), 10)
     
-    # Launch miner
+    # Launch miner using runpy.run_path() - most robust approach
     print(f"Starting miner with {num_threads} threads...")
     print()
     
-    # Call miner's main with thread count
-    sys.argv = [sys.argv[0], str(num_threads), '--native']
-    miner_module.main()
+    # Set environment variables that the miner script will read
+    os.environ['USE_NATIVE'] = '1'
+    
+    # Modify sys.argv for the miner script
+    original_argv = sys.argv[:]
+    sys.argv = [miner_script_path, str(num_threads), '--native']
+    
+    # Also set module-level variables via environment (miner script reads these)
+    # The miner script uses template variables that get replaced, but in bundled mode
+    # we need to set them via environment or by modifying the script's globals
+    
+    # Use runpy to execute the miner script
+    import runpy
+    try:
+        # Create a namespace with our config
+        # The miner script uses template variables {{VAR}} that get replaced during install
+        # In bundled mode, we override them via globals
+        miner_globals = {
+            '__file__': miner_script_path,
+            '__name__': '__main__',
+            '__package__': None,
+            'BTC_WALLET': config['wallet'] or '',
+            'WORKER_NAME': config['worker'] or '',
+            'STRATUM_HOST': config['host'] or '',
+            'STRATUM_PORT': config['port'],
+            'USER_EMAIL': config.get('email') or '',
+            'API_URL': os.environ.get('MINR_API_URL', 'https://api.minr.online'),
+            'AUTH_TOKEN': os.environ.get('MINR_AUTH_TOKEN', ''),
+            'USE_NATIVE': True,
+        }
+        runpy.run_path(miner_script_path, init_globals=miner_globals, run_name='__main__')
+    finally:
+        sys.argv = original_argv
 
 if __name__ == "__main__":
     main()

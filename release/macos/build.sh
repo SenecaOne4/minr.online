@@ -43,7 +43,7 @@ echo "Step 1: Building universal2 native extension..."
     exit 1
 }
 
-# Step 2: Copy miner script
+# Step 2: Copy and preprocess miner script (replace template variables)
 echo ""
 echo "Step 2: Preparing miner script..."
 MINER_SOURCE="$PROJECT_ROOT/miner-scripts/minr-stratum-miner.py"
@@ -54,7 +54,67 @@ if [ ! -f "$MINER_SOURCE" ]; then
     exit 1
 fi
 
+# Copy and replace template variables with environment variable reads
+# This makes the script work in bundled mode without template replacement
 cp "$MINER_SOURCE" "$MINER_BUILD"
+
+# Replace template variables with os.environ.get() calls
+python3 << PREPROCESS_SCRIPT
+import sys
+import re
+
+miner_file = r'$MINER_BUILD'
+
+with open(miner_file, 'r') as f:
+    lines = f.readlines()
+
+# FIRST: Ensure os is imported right after sys (must be before we use os.environ.get)
+# Find import sys and add os import immediately after
+os_added = False
+for i, line in enumerate(lines):
+    if line.strip() == 'import sys':
+        # Check if next line is not already import os
+        if i+1 >= len(lines) or 'import os' not in lines[i+1]:
+            lines.insert(i+1, 'import os\n')
+            os_added = True
+            break
+
+if not os_added and not any('import os' in line for line in lines[:20]):
+    # Fallback: add after first import
+    for i, line in enumerate(lines):
+        if line.startswith('import '):
+            lines.insert(i+1, 'import os\n')
+            break
+
+content = ''.join(lines)
+
+# THEN: Replace template variables with environment variable reads
+# Format: VAR = "{{VAR}}" -> VAR = os.environ.get('VAR', '')
+# Format: VAR = {{VAR}} -> VAR = int(os.environ.get('VAR', '0'))
+
+# String variables
+content = re.sub(r'USER_EMAIL = "{{USER_EMAIL}}"', 
+                 r'USER_EMAIL = os.environ.get("USER_EMAIL", "")', content)
+content = re.sub(r'BTC_WALLET = "{{BTC_WALLET}}"', 
+                 r'BTC_WALLET = os.environ.get("BTC_WALLET", "")', content)
+content = re.sub(r'STRATUM_HOST = "{{STRATUM_HOST}}"', 
+                 r'STRATUM_HOST = os.environ.get("STRATUM_HOST", "")', content)
+content = re.sub(r'WORKER_NAME = "{{WORKER_NAME}}"', 
+                 r'WORKER_NAME = os.environ.get("WORKER_NAME", "")', content)
+content = re.sub(r'API_URL = "{{API_URL}}"', 
+                 r'API_URL = os.environ.get("API_URL", "https://api.minr.online")', content)
+content = re.sub(r'AUTH_TOKEN = "{{AUTH_TOKEN}}"', 
+                 r'AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "")', content)
+
+# Integer variables
+content = re.sub(r'STRATUM_PORT = {{STRATUM_PORT}}', 
+                 r'STRATUM_PORT = int(os.environ.get("STRATUM_PORT", "3333"))', content)
+
+with open(miner_file, 'w') as f:
+    f.write(content)
+
+print("✓ Miner script preprocessed for bundled mode")
+PREPROCESS_SCRIPT
 
 # Step 3: Copy bundled miner launcher
 echo ""
@@ -79,20 +139,25 @@ bundled_miner = r'$BUNDLED_MINER'
 miner_build = r'$MINER_BUILD'
 native_ext = os.path.join(build_dir, 'native_ext', 'minr_native.so')
 
+# Convert paths to absolute and normalize
+bundled_miner_abs = os.path.abspath(bundled_miner)
+miner_build_abs = os.path.abspath(miner_build)
+native_ext_abs = os.path.abspath(native_ext)
+
 spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
 a = Analysis(
-    [r'{bundled_miner}'],
+    [r'{bundled_miner_abs}'],
     pathex=[r'{build_dir}'],
     binaries=[
-        (r'{native_ext}', '.'),
+        (r'{native_ext_abs}', '.'),
     ],
     datas=[
-        (r'{miner_build}', '.'),
+        (r'{miner_build_abs}', '.'),
     ],
-    hiddenimports=['minr_native'],
+    hiddenimports=['minr_native', 'runpy'],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
@@ -212,6 +277,7 @@ echo ""
 echo "Step 6: Packaging zip..."
 cd "$DIST_DIR"
 cp -r "$APP_BUNDLE" .
+cp "$SCRIPT_DIR/README.md" README.txt 2>/dev/null || echo "# Minr.online macOS Bundle" > README.txt
 zip -r "$ZIP_NAME" "Minr.online.app" README.txt || {
     echo "ERROR: Failed to create zip"
     exit 1
