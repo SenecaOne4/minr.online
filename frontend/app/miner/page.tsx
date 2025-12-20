@@ -649,8 +649,6 @@ export default function MinerPage() {
   }, []);
 
   // Show loading or redirect if not authenticated
-  }
-  }
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
@@ -1118,4 +1116,5 @@ export default function MinerPage() {
       </div>
     </div>
   );
+}
 }
